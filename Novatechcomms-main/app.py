@@ -7,25 +7,35 @@ import io
 import json
 import os
 
+import math
+
 import pandas as pd
+import requests
 from reportlab.lib import colors
 from reportlab.lib.pagesizes import A4
 from reportlab.lib.styles import ParagraphStyle, getSampleStyleSheet
-from reportlab.platypus import HRFlowable, Paragraph, SimpleDocTemplate, Spacer, Table, TableStyle
+from reportlab.lib.utils import ImageReader
+from reportlab.platypus import HRFlowable, Image as RLImage, Paragraph, SimpleDocTemplate, Spacer, Table, TableStyle
 import streamlit as st
 
 # ==========================================
-# 1. PAGE CONFIGURATION
+# 1. PAGE CONFIGURATION & BRAND
 # ==========================================
+BRAND_ICON_FILE = "refynit_icon.png"      # orange hexagon "R" (favicon / login)
+BRAND_LOGO_FILE = "refynit_logo.png"      # light wordmark for the dark app
+BRAND_LOGO_PDF_FILE = "refynit_logo_dark.png"  # dark wordmark for the white PDF
+
 st.set_page_config(
-    page_title="Novalink · Telephony Quotation",
-    page_icon="📞",
+    page_title="Refyn-IT Telecoms · Quotation",
+    page_icon=BRAND_ICON_FILE if os.path.exists(BRAND_ICON_FILE) else "📞",
     layout="wide",
     initial_sidebar_state="collapsed",
 )
 
-APP_NAME = "Novalink"
+APP_NAME = "Refyn-IT Telecoms"
 APP_TAGLINE = "Telephony quotation"
+POWERED_BY = "Novalink"
+QUOTE_PREFIX = "RIT"
 
 # ==========================================
 # 2. DESIGN SYSTEM (shared with Prospect Engine)
@@ -35,24 +45,24 @@ APP_CSS = """
 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap');
 
 :root {
-  --bg: #0A0E1A;
-  --surface: #111827;
-  --surface-2: #161F33;
-  --surface-3: #1C2740;
-  --border: rgba(148, 163, 184, 0.14);
-  --border-strong: rgba(148, 163, 184, 0.26);
-  --text: #E7EAF3;
-  --muted: #8C98B0;
-  --faint: #5E6A82;
-  --accent: #7C83FF;
-  --accent-2: #38D6F5;
-  --accent-soft: rgba(124, 131, 255, 0.14);
+  --bg: #0B0C10;
+  --surface: #14161C;
+  --surface-2: #1A1D24;
+  --surface-3: #232730;
+  --border: rgba(212, 217, 223, 0.11);
+  --border-strong: rgba(212, 217, 223, 0.22);
+  --text: #EEF0F3;
+  --muted: #9CA3AE;
+  --faint: #646B76;
+  --accent: #EA5624;
+  --accent-2: #FF9A5A;
+  --accent-soft: rgba(234, 86, 36, 0.14);
   --good: #34D399;
   --warn: #FBBF24;
   --risk: #FB923C;
   --bad: #F87171;
   --radius: 14px;
-  --grad: linear-gradient(135deg, #7C83FF 0%, #38D6F5 100%);
+  --grad: linear-gradient(135deg, #EA5624 0%, #FF9A5A 100%);
 }
 
 html, body, [class*="css"], .stApp, button, input, textarea, select {
@@ -60,8 +70,8 @@ html, body, [class*="css"], .stApp, button, input, textarea, select {
 }
 .stApp {
   background:
-    radial-gradient(1200px 500px at 85% -10%, rgba(56, 214, 245, 0.07), transparent 60%),
-    radial-gradient(900px 500px at 10% -20%, rgba(124, 131, 255, 0.10), transparent 60%),
+    radial-gradient(1200px 500px at 85% -10%, rgba(255, 154, 90, 0.07), transparent 60%),
+    radial-gradient(900px 500px at 10% -20%, rgba(234, 86, 36, 0.10), transparent 60%),
     var(--bg);
 }
 [data-testid="stHeader"] { background: transparent; }
@@ -71,7 +81,7 @@ footer { visibility: hidden; }
 
 /* ---------- Sidebar ---------- */
 [data-testid="stSidebar"] {
-  background: linear-gradient(180deg, #0D1322 0%, #0A0E1A 100%);
+  background: linear-gradient(180deg, #101217 0%, #0B0C10 100%);
   border-right: 1px solid var(--border);
 }
 [data-testid="stSidebar"] .block-container, [data-testid="stSidebarContent"] { padding-top: 0.6rem; }
@@ -93,7 +103,7 @@ div[data-testid="stVerticalBlockBorderWrapper"] {
 }
 .st-key-card-queue { margin-top: 18px; }
 .st-key-card-left, .st-key-card-select, .st-key-card-right, .st-key-card-login, .st-key-card-queue {
-  background: linear-gradient(180deg, rgba(22, 31, 51, 0.85) 0%, rgba(17, 24, 39, 0.85) 100%);
+  background: linear-gradient(180deg, rgba(28, 31, 38, 0.88) 0%, rgba(20, 22, 28, 0.88) 100%);
   border: 1px solid var(--border) !important;
   border-radius: var(--radius);
   padding: 22px 22px 18px 22px;
@@ -127,22 +137,22 @@ textarea { font-family: 'Inter', sans-serif !important; font-size: 0.9rem !impor
 .stButton > button[kind="primary"], .stDownloadButton > button[kind="primary"],
 .stFormSubmitButton > button[kind="primary"], .stFormSubmitButton > button,
 [data-testid="stBaseButton-primary"] {
-  background: var(--grad) !important; border: none !important; color: #0A0E1A !important;
-  box-shadow: 0 8px 24px -10px rgba(124, 131, 255, 0.8);
+  background: var(--grad) !important; border: none !important; color: #0B0C10 !important;
+  box-shadow: 0 8px 24px -10px rgba(234, 86, 36, 0.8);
 }
 .stButton > button[kind="primary"]:hover, [data-testid="stBaseButton-primary"]:hover {
-  filter: brightness(1.08); color: #0A0E1A !important;
+  filter: brightness(1.08); color: #0B0C10 !important;
 }
-.stButton > button[kind="primary"] p, [data-testid="stBaseButton-primary"] p, .stFormSubmitButton > button p { color: #0A0E1A !important; font-weight: 700 !important; }
+.stButton > button[kind="primary"] p, [data-testid="stBaseButton-primary"] p, .stFormSubmitButton > button p { color: #0B0C10 !important; font-weight: 700 !important; }
 
 .stLinkButton a, [data-testid^="stBaseLinkButton"] {
   border-radius: 10px !important; font-weight: 700 !important; padding: 0.55rem 1.1rem !important;
 }
 [data-testid="stBaseLinkButton-primary"], .stLinkButton a[kind="primary"] {
-  background: var(--grad) !important; border: none !important; color: #0A0E1A !important;
-  box-shadow: 0 8px 24px -10px rgba(124, 131, 255, 0.8);
+  background: var(--grad) !important; border: none !important; color: #0B0C10 !important;
+  box-shadow: 0 8px 24px -10px rgba(234, 86, 36, 0.8);
 }
-[data-testid="stBaseLinkButton-primary"] p, .stLinkButton a[kind="primary"] p { color: #0A0E1A !important; font-weight: 700 !important; }
+[data-testid="stBaseLinkButton-primary"] p, .stLinkButton a[kind="primary"] p { color: #0B0C10 !important; font-weight: 700 !important; }
 [data-testid="stBaseLinkButton-primary"]:hover { filter: brightness(1.08); }
 
 /* ---------- Tabs ---------- */
@@ -185,19 +195,19 @@ hr { border-color: var(--border) !important; }
 .pe-step.done { color: var(--muted); }
 .pe-step.done .num { background: rgba(52,211,153,.14); border-color: rgba(52,211,153,.45); color: var(--good); }
 .pe-step.active { background: var(--surface-3); color: var(--text); }
-.pe-step.active .num { background: var(--grad); border: none; color: #0A0E1A; }
+.pe-step.active .num { background: var(--grad); border: none; color: #0B0C10; }
 .pe-step-sep { width: 14px; height: 1px; background: var(--border-strong); }
 
 .pe-section { display: flex; align-items: center; gap: 12px; margin-bottom: 16px; }
 .pe-section .badge { width: 34px; height: 34px; border-radius: 10px; display: grid; place-items: center;
-  background: var(--accent-soft); color: var(--accent); font-weight: 800; font-size: 0.85rem; border: 1px solid rgba(124,131,255,.3); }
+  background: var(--accent-soft); color: var(--accent); font-weight: 800; font-size: 0.85rem; border: 1px solid rgba(234,86,36,.3); }
 .pe-section .t { font-size: 1.08rem; font-weight: 700; color: var(--text); line-height: 1.2; }
 .pe-section .s { font-size: 0.82rem; color: var(--muted); margin-top: 2px; }
 
 .pe-chips { display: flex; flex-wrap: wrap; gap: 6px; }
 .pe-chip { display: inline-flex; align-items: center; gap: 6px; padding: 4px 10px; border-radius: 999px; font-size: 0.76rem;
   font-weight: 600; background: var(--surface-3); color: var(--text); border: 1px solid var(--border); white-space: nowrap; }
-.pe-chip.accent { background: var(--accent-soft); color: #B9BDFF; border-color: rgba(124,131,255,.3); }
+.pe-chip.accent { background: var(--accent-soft); color: #FFB38F; border-color: rgba(234,86,36,.3); }
 .pe-chip.good { background: rgba(52,211,153,.12); color: var(--good); border-color: rgba(52,211,153,.3); }
 .pe-chip.warn { background: rgba(251,191,36,.12); color: var(--warn); border-color: rgba(251,191,36,.3); }
 .pe-chip.risk { background: rgba(251,146,60,.12); color: var(--risk); border-color: rgba(251,146,60,.3); }
@@ -214,7 +224,7 @@ hr { border-color: var(--border) !important; }
 .pe-kpi .l { font-size: 0.72rem; color: var(--muted); font-weight: 600; text-transform: uppercase; letter-spacing: .06em; }
 
 .pe-selected { display: flex; align-items: center; justify-content: space-between; gap: 12px; background: var(--accent-soft);
-  border: 1px solid rgba(124,131,255,.35); border-radius: 12px; padding: 12px 14px; margin: 14px 0 10px 0; }
+  border: 1px solid rgba(234,86,36,.35); border-radius: 12px; padding: 12px 14px; margin: 14px 0 10px 0; }
 .pe-selected .n { font-weight: 700; color: var(--text); }
 .pe-selected .m { font-size: 0.8rem; color: var(--muted); margin-top: 2px; }
 .pe-hint { display: flex; align-items: center; gap: 10px; color: var(--muted); font-size: 0.86rem; background: var(--surface);
@@ -243,7 +253,7 @@ hr { border-color: var(--border) !important; }
 
 .pe-contact { display: flex; align-items: center; gap: 12px; }
 .pe-avatar { width: 44px; height: 44px; border-radius: 12px; display: grid; place-items: center; font-weight: 800; font-size: 0.95rem;
-  background: var(--grad); color: #0A0E1A; flex-shrink: 0; }
+  background: var(--grad); color: #0B0C10; flex-shrink: 0; }
 .pe-contact .n { font-weight: 700; font-size: 1.02rem; color: var(--text); }
 .pe-contact .r { font-size: 0.8rem; color: var(--muted); margin-top: 2px; }
 
@@ -262,9 +272,9 @@ hr { border-color: var(--border) !important; }
 .pe-officer .who { color: var(--text); font-weight: 600; }
 .pe-officer .since { color: var(--faint); font-size: 0.76rem; white-space: nowrap; }
 
-.pe-hook { background: linear-gradient(135deg, rgba(124,131,255,.12), rgba(56,214,245,.06)); border: 1px solid rgba(124,131,255,.28);
+.pe-hook { background: linear-gradient(135deg, rgba(234,86,36,.12), rgba(255,154,90,.06)); border: 1px solid rgba(234,86,36,.28);
   border-radius: 12px; padding: 14px 16px; }
-.pe-hook .h { font-size: 0.7rem; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; color: #B9BDFF; }
+.pe-hook .h { font-size: 0.7rem; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; color: #FFB38F; }
 .pe-hook .t { font-weight: 700; color: var(--text); margin: 4px 0 10px 0; }
 .pe-hook ul { margin: 0; padding-left: 0; list-style: none; }
 .pe-hook li { font-size: 0.85rem; color: var(--text); padding: 4px 0 4px 24px; position: relative; }
@@ -272,8 +282,8 @@ hr { border-color: var(--border) !important; }
 
 /* Sidebar components */
 .pe-brand { display: flex; align-items: center; gap: 12px; padding: 4px 0 18px 0; border-bottom: 1px solid var(--border); margin-bottom: 16px; }
-.pe-logo { width: 40px; height: 40px; border-radius: 12px; background: var(--grad); display: grid; place-items: center; color: #0A0E1A;
-  box-shadow: 0 10px 24px -10px rgba(124,131,255,.9); }
+.pe-logo { width: 40px; height: 40px; border-radius: 12px; background: var(--grad); display: grid; place-items: center; color: #0B0C10;
+  box-shadow: 0 10px 24px -10px rgba(234,86,36,.9); }
 .pe-brand .n { font-weight: 800; font-size: 1.05rem; color: var(--text); letter-spacing: -0.02em; }
 .pe-brand .s { font-size: 0.75rem; color: var(--muted); }
 .pe-side-h { font-size: 0.68rem; font-weight: 700; letter-spacing: .1em; text-transform: uppercase; color: var(--faint); margin: 18px 0 8px 0; }
@@ -291,6 +301,23 @@ hr { border-color: var(--border) !important; }
 .pe-login-head .pe-logo { width: 54px; height: 54px; margin: 0 auto 16px auto; border-radius: 16px; }
 .pe-login-head .t { font-size: 1.6rem; font-weight: 800; letter-spacing: -0.03em; color: var(--text); }
 .pe-login-head .s { color: var(--muted); font-size: 0.92rem; margin-top: 6px; }
+
+/* ---------- Refyn-IT brand ---------- */
+.rit-brandrow { display: flex; align-items: center; gap: 16px; flex-wrap: wrap; margin-bottom: 16px; }
+.rit-logo { display: block; width: auto; }
+.rit-logo-text { font-weight: 800; font-style: italic; font-size: 1.6rem; letter-spacing: .02em; color: #D4D9DF; }
+.rit-logo-text span { color: var(--accent); }
+.rit-powered { display: inline-flex; align-items: center; gap: 8px; font-size: 0.74rem; font-weight: 600; color: var(--muted);
+  background: var(--surface); border: 1px solid var(--border); border-radius: 999px; padding: 5px 12px 5px 5px; white-space: nowrap; }
+.rit-powered .pb { background: var(--grad); color: #0B0C10; font-weight: 800; letter-spacing: .08em; text-transform: uppercase;
+  font-size: 0.66rem; padding: 3px 9px; border-radius: 999px; }
+.rit-powered b { color: var(--text); font-weight: 700; }
+.rit-powered .sep { display: none; }
+.rit-login-logo { display: flex; justify-content: center; margin-bottom: 18px; }
+.pe-login-head .s .rit-powered { margin: 6px 0 4px 0; }
+.pe-title { font-style: italic; }
+.pe-title span { padding-right: 4px; }
+.pe-section .badge { font-style: italic; }
 </style>
 """
 
@@ -302,26 +329,27 @@ NOVALINK_CSS = """
 .block-container { max-width: 1440px; }
 
 .st-key-card-users, .st-key-card-hardware, .st-key-card-details, .st-key-card-summary,
-.st-key-card-cv-head, .st-key-card-cv-monthly, .st-key-card-cv-oneoff {
-  background: linear-gradient(180deg, rgba(22, 31, 51, 0.85) 0%, rgba(17, 24, 39, 0.85) 100%);
+.st-key-card-cv-head, .st-key-card-cv-monthly, .st-key-card-cv-oneoff, .st-key-card-deploy,
+.st-key-card-admin, .st-key-card-admin-login, .st-key-card-admin-tariff, .st-key-card-admin-profit, .st-key-card-admin-order {
+  background: linear-gradient(180deg, rgba(28, 31, 38, 0.88) 0%, rgba(20, 22, 28, 0.88) 100%);
   border: 1px solid var(--border) !important;
   border-radius: var(--radius);
   padding: 22px 22px 18px 22px;
   box-shadow: 0 1px 0 rgba(255,255,255,0.03) inset, 0 20px 40px -24px rgba(0,0,0,0.6);
   margin-bottom: 18px;
 }
-.st-key-card-summary { border-color: rgba(124,131,255,.35) !important; }
+.st-key-card-summary { border-color: rgba(234,86,36,.35) !important; }
 [data-testid="stColumn"]:has(.st-key-card-summary), [data-testid="column"]:has(.st-key-card-summary) {
   position: sticky; top: 1rem; align-self: flex-start; }
 
 /* Licence feature panel */
 .nl-licence { position: relative; border-radius: 14px; padding: 20px; overflow: hidden;
-  background: linear-gradient(135deg, rgba(124,131,255,.16), rgba(56,214,245,.07));
-  border: 1px solid rgba(124,131,255,.35); }
+  background: linear-gradient(135deg, rgba(234,86,36,.16), rgba(255,154,90,.07));
+  border: 1px solid rgba(234,86,36,.35); }
 .nl-licence .top { display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; }
 .nl-licence .name { font-size: 1.15rem; font-weight: 800; color: var(--text); letter-spacing: -0.02em; }
 .nl-licence .sub { font-size: 0.82rem; color: var(--muted); margin-top: 4px; }
-.nl-price { background: var(--grad); color: #0A0E1A; font-weight: 800; font-size: 0.9rem; padding: 6px 12px;
+.nl-price { background: var(--grad); color: #0B0C10; font-weight: 800; font-size: 0.9rem; padding: 6px 12px;
   border-radius: 999px; white-space: nowrap; }
 .nl-price small { font-weight: 600; font-size: 0.72rem; opacity: .8; }
 .nl-feats { display: grid; grid-template-columns: 1fr 1fr; gap: 8px 16px; margin: 16px 0 14px 0; }
@@ -345,13 +373,13 @@ NOVALINK_CSS = """
   padding: 14px 14px 12px 14px; transition: border-color .15s ease, transform .15s ease, box-shadow .15s ease;
   height: 100%;
 }
-[class*="st-key-prod-"]:hover { border-color: rgba(124,131,255,.45) !important; transform: translateY(-2px);
+[class*="st-key-prod-"]:hover { border-color: rgba(234,86,36,.45) !important; transform: translateY(-2px);
   box-shadow: 0 16px 30px -20px rgba(0,0,0,.8); }
-[class*="st-key-prod-on-"] { border-color: rgba(56,214,245,.55) !important; box-shadow: 0 0 0 1px rgba(56,214,245,.25), 0 16px 30px -20px rgba(56,214,245,.35); }
+[class*="st-key-prod-on-"] { border-color: rgba(255,154,90,.55) !important; box-shadow: 0 0 0 1px rgba(255,154,90,.25), 0 16px 30px -20px rgba(255,154,90,.35); }
 .nl-prod-top { display: flex; justify-content: space-between; align-items: center; gap: 8px; }
 .nl-prod-price { font-weight: 800; font-size: 1.05rem; color: var(--text); letter-spacing: -0.02em; }
 .nl-stage { height: 140px; margin: 12px 0 10px 0; border-radius: 12px; display: grid; place-items: center; overflow: hidden;
-  background: radial-gradient(120% 90% at 50% 20%, #FFFFFF 0%, #EEF1F8 70%, #E3E8F2 100%); }
+  background: radial-gradient(120% 90% at 50% 20%, #FFFFFF 0%, #EEF0F3 70%, #E2E5EA 100%); }
 .nl-stage img { max-height: 124px; max-width: 88%; object-fit: contain; filter: drop-shadow(0 8px 10px rgba(15,23,42,.18)); }
 .nl-stage .ph { color: #94A3B8; display: grid; place-items: center; gap: 6px; font-size: 0.72rem; }
 .nl-prod-name { font-weight: 700; font-size: 0.92rem; color: var(--text); line-height: 1.25; min-height: 2.4em; }
@@ -359,7 +387,7 @@ NOVALINK_CSS = """
   display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
 .nl-qty { text-align: center; font-weight: 800; font-size: 1.05rem; color: var(--text); background: var(--surface-2);
   border: 1px solid var(--border-strong); border-radius: 10px; padding: 7px 0; }
-.nl-qty.on { border-color: rgba(56,214,245,.6); color: var(--accent-2); }
+.nl-qty.on { border-color: rgba(255,154,90,.6); color: var(--accent-2); }
 .nl-sub { text-align: center; font-size: 0.74rem; margin-top: 8px; color: var(--faint); }
 .nl-sub.on { color: var(--accent-2); font-weight: 600; }
 [class*="st-key-prod-"] .stButton > button { padding: 0.3rem 0 !important; min-height: 38px; font-size: 1.05rem !important; }
@@ -378,7 +406,7 @@ NOVALINK_CSS = """
 .nl-total .v { font-size: 1.5rem; font-weight: 800; color: var(--text); letter-spacing: -0.03em; line-height: 1.2; margin-top: 2px; }
 .nl-total .v small { font-size: 0.78rem; font-weight: 600; color: var(--muted); letter-spacing: 0; }
 .nl-total .i { font-size: 0.78rem; color: var(--faint); margin-top: 1px; }
-.nl-total.hero { background: linear-gradient(135deg, rgba(124,131,255,.18), rgba(56,214,245,.08)); border-color: rgba(124,131,255,.4); }
+.nl-total.hero { background: linear-gradient(135deg, rgba(234,86,36,.18), rgba(255,154,90,.08)); border-color: rgba(234,86,36,.4); }
 .nl-total.hero .v { background: var(--grad); -webkit-background-clip: text; background-clip: text; color: transparent; }
 .nl-lines-h { font-size: 0.7rem; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; color: var(--faint); margin: 14px 0 6px 0; }
 .nl-line { display: flex; justify-content: space-between; gap: 10px; font-size: 0.84rem; padding: 7px 0; border-top: 1px solid var(--border); }
@@ -424,12 +452,48 @@ NOVALINK_CSS = """
 .nl-table td { padding: 12px; border-bottom: 1px solid var(--border); color: var(--text); vertical-align: middle; background: transparent !important; }
 .nl-table td.num, .nl-table th.num { text-align: right; white-space: nowrap; }
 .nl-table .desc { color: var(--muted); font-size: 0.76rem; margin-top: 2px; }
-.nl-table .thumb { width: 44px; height: 44px; border-radius: 10px; background: #F1F4FA; display: grid; place-items: center; overflow: hidden; }
+.nl-table .thumb { width: 44px; height: 44px; border-radius: 10px; background: #F1F2F4; display: grid; place-items: center; overflow: hidden; }
 .nl-table .thumb img { max-width: 38px; max-height: 38px; object-fit: contain; }
 .nl-table tr.sub td { border-bottom: none; padding-top: 8px; padding-bottom: 4px; color: var(--muted); }
 .nl-table tr.grand td { border-top: 1px solid var(--border-strong); font-weight: 800; font-size: 1rem; padding-top: 12px; }
 .nl-table tr.grand td.num { background: var(--grad) !important; -webkit-background-clip: text !important; background-clip: text !important; color: transparent; }
 .nl-note { margin-top: 14px; font-size: 0.82rem; color: var(--muted); border: 1px dashed var(--border-strong); border-radius: 12px; padding: 12px 14px; }
+
+/* Deployment option cards */
+[class*="st-key-dep-"] { background: var(--surface); border: 1px solid var(--border) !important; border-radius: 14px;
+  padding: 16px 16px 14px 16px; height: 100%; transition: border-color .15s ease, box-shadow .15s ease; }
+[class*="st-key-dep-off-"]:hover { border-color: rgba(234,86,36,.45) !important; }
+[class*="st-key-dep-on-"] { border-color: rgba(234,86,36,.7) !important;
+  background: linear-gradient(135deg, rgba(234,86,36,.14), rgba(255,154,90,.05)) !important;
+  box-shadow: 0 0 0 1px rgba(234,86,36,.3), 0 16px 30px -20px rgba(234,86,36,.45); }
+.rit-dep-top { display: flex; justify-content: space-between; align-items: flex-start; gap: 10px; }
+.rit-dep-name { font-weight: 800; font-size: 1rem; color: var(--text); letter-spacing: -0.01em; }
+.rit-dep-price { font-weight: 800; font-size: 1.15rem; color: var(--text); white-space: nowrap; }
+[class*="st-key-dep-on-"] .rit-dep-price { color: var(--accent-2); }
+.rit-dep-desc { font-size: 0.8rem; color: var(--muted); margin-top: 6px; line-height: 1.4; min-height: 2.3em; }
+[class*="st-key-dep-on-"] .stButton > button:disabled { background: var(--grad) !important; color: #0B0C10 !important; opacity: 1 !important; border: none !important; }
+[class*="st-key-dep-on-"] .stButton > button:disabled p { color: #0B0C10 !important; font-weight: 700 !important; }
+
+/* Admin */
+.rit-admin-h { font-size: 0.7rem; font-weight: 700; letter-spacing: .1em; text-transform: uppercase; color: var(--accent-2);
+  margin: 14px 0 6px 0; padding-top: 12px; border-top: 1px solid var(--border); }
+.rit-floor { display: flex; align-items: center; gap: 8px; font-size: 0.8rem; color: var(--muted); background: var(--surface);
+  border: 1px dashed var(--border-strong); border-radius: 10px; padding: 10px 12px; margin-bottom: 16px; }
+.rit-floor svg { color: var(--accent); flex-shrink: 0; }
+.rit-admin-note { font-size: 0.84rem; color: var(--muted); margin-bottom: 8px; }
+.st-key-card-admin-login { margin-top: 6vh; }
+.rit-admin-bar { display: flex; align-items: center; gap: 8px; font-size: 0.8rem; color: var(--muted); padding: 9px 0; }
+.rit-admin-bar svg { color: var(--accent); }
+.rit-deal { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-bottom: 14px; font-size: 0.9rem; color: var(--text); }
+.rit-deal span:last-child { color: var(--muted); font-size: 0.82rem; }
+.rit-pkpis { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin-bottom: 18px; }
+@media (max-width: 1100px) { .rit-pkpis { grid-template-columns: 1fr 1fr; } }
+.rit-hero-kpi { background: linear-gradient(135deg, rgba(52,211,153,.12), rgba(52,211,153,.03)) !important; border-color: rgba(52,211,153,.35) !important; }
+.rit-hero-kpi .v { color: var(--good) !important; }
+.rit-p.pos { color: var(--good); font-weight: 700; }
+.rit-p.zero { color: var(--faint); }
+.nl-table tr.grp td { font-size: 0.68rem; font-weight: 700; letter-spacing: .1em; text-transform: uppercase; color: var(--accent-2);
+  padding: 14px 12px 6px 12px; border-bottom: 1px solid var(--border); }
 </style>
 """
 
@@ -503,8 +567,27 @@ def money(v: float) -> str:
     return f"£{v:,.2f}"
 
 
+@st.cache_data
+def brand_img_uri(path):
+    if path and os.path.exists(path):
+        with open(path, "rb") as f:
+            return "data:image/png;base64," + base64.b64encode(f.read()).decode("utf-8")
+    return None
+
+
+def brand_logo_html(height=34, cls="rit-logo") -> str:
+    uri = brand_img_uri(BRAND_LOGO_FILE)
+    if uri:
+        return f'<img class="{cls}" src="{uri}" alt="Refyn-IT" style="height:{height}px">'
+    return f'<span class="{cls}-text">REFYN<span>IT</span></span>'
+
+
+def powered_by_html() -> str:
+    return f'<span class="rit-powered"><span class="pb">Telecoms</span><span class="sep"></span>powered by <b>{POWERED_BY}</b></span>'
+
+
 def hero_html(active_step: int) -> str:
-    steps = ["Users", "Hardware", "Details", "PDF"]
+    steps = ["Users", "Deployment", "Hardware", "Details"]
     parts = []
     for i, label in enumerate(steps, start=1):
         state = "done" if i < active_step else "active" if i == active_step else ""
@@ -513,9 +596,10 @@ def hero_html(active_step: int) -> str:
     stepper = '<div class="pe-step-sep"></div>'.join(parts)
     return (
         '<div class="pe-hero"><div>'
+        f'<div class="rit-brandrow">{brand_logo_html(40)}{powered_by_html()}</div>'
         f'<div class="pe-eyebrow"><span class="dot"></span>Hosted cloud telephony · {esc(datetime.now().strftime("%d %B %Y"))}</div>'
-        '<div class="pe-title">Novalink Telephony <span>Quotation</span></div>'
-        '<div class="pe-sub">Combine cloud user licences with desk, cordless and headset hardware.'
+        '<div class="pe-title">Telephony, <span>refined.</span></div>'
+        '<div class="pe-sub">Combine cloud user licences, deployment and desk, cordless and headset hardware.'
         ' Totals update live, and the official PDF is one click away.</div>'
         f'</div><div class="pe-stepper">{stepper}</div></div>'
     )
@@ -535,9 +619,10 @@ def check_password() -> bool:
     _, mid, _ = st.columns([1, 1.25, 1])
     with mid:
         render_html(
-            f'<div class="pe-login-head"><div class="pe-logo">{icon("phone", 24, 2.2)}</div>'
-            f'<div class="t">{APP_NAME} Quotation</div>'
-            '<div class="s">Reseller access only. Enter your access key to continue.</div></div>'
+            f'<div class="pe-login-head"><div class="rit-login-logo">{brand_logo_html(46)}</div>'
+            f'<div class="t">Telecoms quotation portal</div>'
+            f'<div class="s">{powered_by_html()}</div>'
+            '<div class="s">Authorised Refyn-IT staff only. Enter your access key to continue.</div></div>'
         )
         if not configured_password:
             st.error("APP_PASSWORD isn't set in Streamlit Secrets, so access is locked. Add it under App settings → Secrets.")
@@ -578,8 +663,6 @@ def get_base64_image(image_path):
 # ==========================================
 # 5. HARDWARE & ACCESSORIES CATALOGUE
 # ==========================================
-LICENCE_MONTHLY_RATE = 9.00
-ACTIVATION_FEE_PER_USER = 25.00
 VAT_RATE = 0.20
 CATALOGUE_FILE = "catalogue.json"
 
@@ -642,8 +725,165 @@ def load_products():
 PRODUCTS = load_products()
 
 # ==========================================
-# 6. SESSION STATE & PRICING
+# 6. RESELLER PRICING (floors set by Novalink, sell prices set by Refyn-IT)
 # ==========================================
+# Floors are Novalink's price to the reseller. The admin panel can only raise
+# these, never go below them - enforced here, whatever the saved file says.
+FLOOR_LICENCE_MONTHLY = 9.00      # per user / month
+FLOOR_SETUP_PER_USER = 4.00       # per user, one-off
+FLOOR_BASIC_DEPLOYMENT = 75.00    # flat, one-off
+
+DEPLOY_BASIC = "basic"
+DEPLOY_ADVANCED = "advanced"
+DEPLOYMENT_LABELS = {
+    DEPLOY_BASIC: "Basic system build",
+    DEPLOY_ADVANCED: "Advanced system deployment",
+}
+DEPLOYMENT_DESCS = {
+    DEPLOY_BASIC: "Device activation & remote configuration · customer self-installation",
+    DEPLOY_ADVANCED: "Fully managed deployment · system design, build, installation & go-live support",
+}
+
+SETTINGS_FILE = "pricing_settings.json"
+DEFAULT_SETTINGS = {
+    "licence_monthly": FLOOR_LICENCE_MONTHLY,
+    "setup_per_user": FLOOR_SETUP_PER_USER,
+    "basic_deployment": FLOOR_BASIC_DEPLOYMENT,
+    "default_deployment": DEPLOY_BASIC,
+    "company_name": "Refyn-IT",
+    "company_email": "",
+    "company_phone": "",
+    "updated": "",
+}
+
+
+def advanced_deployment_price(users: int) -> float:
+    """Locked Novalink tariff (not editable by the reseller).
+    1-5 users £250 · 6-10 users £500 · then £750 per band of 10:
+    11-20 £750, 21-30 £1,500, 31-40 £2,250 ..."""
+    users = int(users or 0)
+    if users <= 0:
+        return 0.0
+    if users <= 5:
+        return 250.0
+    if users <= 10:
+        return 500.0
+    return 750.0 * math.ceil((users - 10) / 10)
+
+
+def sanitise_settings(raw: dict) -> dict:
+    s = {**DEFAULT_SETTINGS, **(raw or {})}
+
+    def num(key, floor):
+        try:
+            v = float(s.get(key, floor))
+        except (TypeError, ValueError):
+            v = floor
+        return round(max(floor, v), 2)
+
+    s["licence_monthly"] = num("licence_monthly", FLOOR_LICENCE_MONTHLY)
+    s["setup_per_user"] = num("setup_per_user", FLOOR_SETUP_PER_USER)
+    s["basic_deployment"] = num("basic_deployment", FLOOR_BASIC_DEPLOYMENT)
+    if s.get("default_deployment") not in DEPLOYMENT_LABELS:
+        s["default_deployment"] = DEPLOY_BASIC
+    for k in ("company_name", "company_email", "company_phone", "updated"):
+        s[k] = str(s.get(k) or "")
+    return {k: s[k] for k in DEFAULT_SETTINGS}
+
+
+# ---- Persistence -------------------------------------------------------
+# Streamlit Community Cloud wipes local files when the app reboots or sleeps,
+# so if GITHUB_TOKEN + GITHUB_REPO are in Secrets, settings are also committed
+# to the repo and survive restarts. Without them, a local file is used.
+def _secret(key, default=""):
+    try:
+        return st.secrets.get(key, default)
+    except Exception:
+        return default
+
+
+def _gh_config():
+    token, repo = _secret("GITHUB_TOKEN"), _secret("GITHUB_REPO")
+    if token and repo:
+        return {"token": token, "repo": repo, "branch": _secret("GITHUB_BRANCH", "main"),
+                "path": _secret("GITHUB_SETTINGS_PATH", SETTINGS_FILE)}
+    return None
+
+
+def _gh_headers(cfg):
+    return {"Authorization": f"Bearer {cfg['token']}", "Accept": "application/vnd.github+json"}
+
+
+def _gh_read(cfg):
+    url = f"https://api.github.com/repos/{cfg['repo']}/contents/{cfg['path']}"
+    r = requests.get(url, headers=_gh_headers(cfg), params={"ref": cfg["branch"]}, timeout=10)
+    if r.status_code == 404:
+        return None, None
+    r.raise_for_status()
+    body = r.json()
+    return json.loads(base64.b64decode(body["content"]).decode("utf-8")), body["sha"]
+
+
+@st.cache_data(ttl=300, show_spinner=False)
+def load_settings() -> dict:
+    cfg = _gh_config()
+    if cfg:
+        try:
+            data, _ = _gh_read(cfg)
+            if data:
+                return sanitise_settings(data)
+        except Exception:
+            pass  # fall back to local file
+    if os.path.isfile(SETTINGS_FILE):
+        try:
+            with open(SETTINGS_FILE, "r") as f:
+                return sanitise_settings(json.load(f))
+        except (json.JSONDecodeError, OSError):
+            pass
+    return sanitise_settings({})
+
+
+def save_settings(new_settings: dict):
+    """Returns (ok, message)."""
+    clean = sanitise_settings({**new_settings, "updated": datetime.now().strftime("%d %b %Y, %H:%M")})
+    payload = json.dumps(clean, indent=2)
+    try:
+        with open(SETTINGS_FILE, "w") as f:
+            f.write(payload)
+    except OSError:
+        pass
+    cfg = _gh_config()
+    msg = "Saved."
+    if cfg:
+        try:
+            _, sha = _gh_read(cfg)
+            body = {"message": "Update reseller pricing settings", "branch": cfg["branch"],
+                    "content": base64.b64encode(payload.encode("utf-8")).decode("utf-8")}
+            if sha:
+                body["sha"] = sha
+            url = f"https://api.github.com/repos/{cfg['repo']}/contents/{cfg['path']}"
+            r = requests.put(url, headers=_gh_headers(cfg), json=body, timeout=15)
+            r.raise_for_status()
+            msg = "Saved permanently."
+        except Exception as exc:
+            load_settings.clear()
+            return False, f"Saved for now, but couldn't write to GitHub ({exc}). Prices may reset when the app restarts."
+    else:
+        msg = "Saved. Note: without GitHub storage configured, prices reset if the app restarts."
+    load_settings.clear()
+    return True, msg
+
+
+SETTINGS = load_settings()
+LICENCE_MONTHLY_RATE = SETTINGS["licence_monthly"]
+SETUP_FEE_PER_USER = SETTINGS["setup_per_user"]
+BASIC_DEPLOYMENT_FEE = SETTINGS["basic_deployment"]
+
+# ==========================================
+# 7. SESSION STATE & QUOTE MATHS
+# ==========================================
+if "deployment" not in st.session_state:
+    st.session_state.deployment = SETTINGS["default_deployment"]
 if "basket" not in st.session_state:
     st.session_state.basket = {}
 if "num_licences" not in st.session_state:
@@ -681,42 +921,254 @@ def total_monthly_licences():
     return float(users) * LICENCE_MONTHLY_RATE if users > 0 else 0.0
 
 
-def total_activation_fee():
-    users = st.session_state.get("num_licences", 0)
-    return float(users) * ACTIVATION_FEE_PER_USER if users > 0 else 0.0
+def total_setup_fee(users=None):
+    users = st.session_state.get("num_licences", 0) if users is None else users
+    return float(users) * SETUP_FEE_PER_USER if users > 0 else 0.0
+
+
+def deployment_fee(option=None, users=None):
+    """Deployment only applies when there are users on the system."""
+    users = st.session_state.get("num_licences", 0) if users is None else users
+    option = option or st.session_state.get("deployment", DEPLOY_BASIC)
+    if users <= 0:
+        return 0.0
+    if option == DEPLOY_ADVANCED:
+        return advanced_deployment_price(users)
+    return BASIC_DEPLOYMENT_FEE
+
+
+def total_one_off():
+    return total_setup_fee() + deployment_fee() + total_hardware_capex()
+
+
+def reseller_margin(users, option):
+    """Refyn-IT's margin over the Novalink floors (admin eyes only)."""
+    if users <= 0:
+        return {"monthly": 0.0, "one_off": 0.0}
+    monthly = (LICENCE_MONTHLY_RATE - FLOOR_LICENCE_MONTHLY) * users
+    one_off = (SETUP_FEE_PER_USER - FLOOR_SETUP_PER_USER) * users
+    if option == DEPLOY_BASIC:
+        one_off += BASIC_DEPLOYMENT_FEE - FLOOR_BASIC_DEPLOYMENT
+    return {"monthly": monthly, "one_off": one_off}
+
+
+CONTRACT_MONTHS = 36
+
+
+def novalink_deployment_cost(option, users):
+    """What Novalink charges the reseller for deployment (floor / locked tariff)."""
+    if users <= 0:
+        return 0.0
+    if option == DEPLOY_ADVANCED:
+        return advanced_deployment_price(users)
+    return FLOOR_BASIC_DEPLOYMENT
+
+
+def cost_sell_lines(users, option, hw_items):
+    """Every line on the deal with Novalink cost vs Refyn-IT sell price.
+    kind = 'monthly' or 'one_off'. Hardware is supplied at catalogue price (no uplift yet)."""
+    lines = []
+    if users > 0:
+        lines.append({"kind": "monthly", "name": "Hosted VoIP cloud user licence",
+                      "desc": "Per user, per month",
+                      "qty": users, "cost_unit": FLOOR_LICENCE_MONTHLY, "sell_unit": LICENCE_MONTHLY_RATE})
+        lines.append({"kind": "one_off", "name": "User setup & provisioning",
+                      "desc": "Per user, one-off",
+                      "qty": users, "cost_unit": FLOOR_SETUP_PER_USER, "sell_unit": SETUP_FEE_PER_USER})
+        lines.append({"kind": "one_off", "name": DEPLOYMENT_LABELS[option],
+                      "desc": DEPLOYMENT_DESCS[option],
+                      "qty": 1, "cost_unit": novalink_deployment_cost(option, users),
+                      "sell_unit": deployment_fee(option, users)})
+    for itm in hw_items:
+        lines.append({"kind": "one_off", "name": itm["name"], "desc": itm.get("desc", ""),
+                      "qty": itm["qty"], "cost_unit": itm["price"], "sell_unit": itm["price"]})
+    for ln in lines:
+        ln["cost_total"] = ln["cost_unit"] * ln["qty"]
+        ln["sell_total"] = ln["sell_unit"] * ln["qty"]
+        ln["profit"] = ln["sell_total"] - ln["cost_total"]
+    return lines
+
+
+def profit_summary(lines):
+    def tot(kind, field):
+        return sum(ln[field] for ln in lines if ln["kind"] == kind)
+    s = {
+        "monthly_cost": tot("monthly", "cost_total"), "monthly_sell": tot("monthly", "sell_total"),
+        "oneoff_cost": tot("one_off", "cost_total"), "oneoff_sell": tot("one_off", "sell_total"),
+    }
+    s["monthly_profit"] = s["monthly_sell"] - s["monthly_cost"]
+    s["annual_profit"] = s["monthly_profit"] * 12
+    s["contract_recurring_profit"] = s["monthly_profit"] * CONTRACT_MONTHS
+    s["oneoff_profit"] = s["oneoff_sell"] - s["oneoff_cost"]
+    s["contract_total_profit"] = s["contract_recurring_profit"] + s["oneoff_profit"]
+    s["contract_revenue"] = s["monthly_sell"] * CONTRACT_MONTHS + s["oneoff_sell"]
+    s["contract_cost"] = s["monthly_cost"] * CONTRACT_MONTHS + s["oneoff_cost"]
+    s["margin_pct"] = (s["contract_total_profit"] / s["contract_revenue"] * 100) if s["contract_revenue"] else 0.0
+    return s
 
 
 # ==========================================
-# 7. PDF QUOTATION (ReportLab, A4)
+# 8. PDF QUOTATION (ReportLab, A4)
 # ==========================================
-def generate_quotation_pdf(quote_meta, reseller, customer, num_users, hw_items):
+def generate_partner_order_pdf(order_meta, partner, end_customer, lines):
+    """Novalink -> Refyn-IT wholesale order. Shows ONLY Novalink prices - never the reseller's sell prices."""
+    partner_plain = str(partner.get("company", ""))
+    partner = {k: esc(v) for k, v in partner.items()}
+    end_customer = {k: esc(v) for k, v in end_customer.items()}
+
+    buffer = io.BytesIO()
+    doc = SimpleDocTemplate(buffer, pagesize=A4, rightMargin=27, leftMargin=27, topMargin=30, bottomMargin=40,
+                            title=f"Novalink partner order {order_meta['ref']}", author=POWERED_BY)
+    styles = getSampleStyleSheet()
+    c_primary = colors.HexColor("#0F5A73")   # Novalink teal
+    c_slate = colors.HexColor("#475569")
+    c_dark = colors.HexColor("#0F172A")
+    c_bg = colors.HexColor("#F4F8FA")
+    c_border = colors.HexColor("#CBD5E1")
+
+    title_style = ParagraphStyle("T", parent=styles["Normal"], fontName="Helvetica-Bold", fontSize=19, leading=23, textColor=c_primary)
+    sub_style = ParagraphStyle("S", parent=styles["Normal"], fontName="Helvetica", fontSize=8.5, leading=12, textColor=c_slate)
+    meta_style = ParagraphStyle("M", parent=styles["Normal"], fontName="Helvetica", fontSize=8.5, leading=12, textColor=c_slate, alignment=2)
+    sec_head = ParagraphStyle("H", parent=styles["Normal"], fontName="Helvetica-Bold", fontSize=10.5, leading=14, textColor=c_primary)
+    th_style = ParagraphStyle("TH", parent=styles["Normal"], fontName="Helvetica-Bold", fontSize=8.5, leading=11, textColor=colors.white)
+    td_style = ParagraphStyle("TD", parent=styles["Normal"], fontName="Helvetica", fontSize=8.5, leading=11.5, textColor=c_dark)
+    td_bold = ParagraphStyle("TDB", parent=styles["Normal"], fontName="Helvetica-Bold", fontSize=8.5, leading=11.5, textColor=c_dark)
+    note_style = ParagraphStyle("N", parent=styles["Normal"], fontName="Helvetica", fontSize=7.8, leading=11, textColor=c_slate)
+
+    story = []
+    hdr = Table([[
+        [Paragraph("NOVALINK", title_style),
+         Paragraph("<b>Partner Order &amp; Wholesale Quotation</b><br/>Hosted cloud telephony · partner pricing", sub_style)],
+        Paragraph(
+            f"<b>Order Ref:</b> {order_meta['ref']}<br/>"
+            f"<b>Partner Quote Ref:</b> {order_meta['customer_ref']}<br/>"
+            f"<b>Date:</b> {order_meta['date']}<br/>"
+            f"<b>Term:</b> {CONTRACT_MONTHS} Months Minimum", meta_style),
+    ]], colWidths=[330, 210])
+    hdr.setStyle(TableStyle([("VALIGN", (0, 0), (-1, -1), "BOTTOM"), ("LEFTPADDING", (0, 0), (0, 0), 0)]))
+    story += [hdr, Spacer(1, 8), HRFlowable(width="100%", thickness=1.5, color=c_primary, spaceAfter=10)]
+
+    addr = f"Site: {end_customer['delivery']}<br/>" if end_customer.get("delivery") and end_customer["delivery"] != "N/A" else ""
+    parties = Table([
+        [Paragraph("<b>SUPPLIER</b>", td_bold), Paragraph("<b>PARTNER (BILL TO)</b>", td_bold), Paragraph("<b>END CUSTOMER (PROVISION FOR)</b>", td_bold)],
+        [Paragraph(f"<b>{POWERED_BY}</b><br/>Hosted telephony platform", td_style),
+         Paragraph(f"<b>{partner['company']}</b><br/>{partner['name']}<br/>{partner['email']}<br/>{partner['phone']}", td_style),
+         Paragraph(f"<b>{end_customer['company']}</b><br/>Contact: {end_customer['name']}<br/>{addr}", td_style)],
+    ], colWidths=[150, 195, 195])
+    parties.setStyle(TableStyle([
+        ("BACKGROUND", (0, 0), (-1, 0), c_bg), ("BOX", (0, 0), (-1, -1), 1, c_border),
+        ("INNERGRID", (0, 0), (-1, -1), 0.5, c_border), ("VALIGN", (0, 0), (-1, -1), "TOP"),
+        ("TOPPADDING", (0, 0), (-1, -1), 5), ("BOTTOMPADDING", (0, 0), (-1, -1), 5), ("LEFTPADDING", (0, 0), (-1, -1), 8),
+    ]))
+    story += [parties, Spacer(1, 10)]
+
+    def section(title, kind, per_month):
+        rows = [[Paragraph("Item / Description", th_style), Paragraph("Qty", th_style),
+                 Paragraph("Partner Price (Ex VAT)", th_style), Paragraph("Line Total (Ex VAT)", th_style)]]
+        sel = [ln for ln in lines if ln["kind"] == kind]
+        suffix = " / mo" if per_month else ""
+        for ln in sel:
+            rows.append([
+                Paragraph(f"<b>{esc(ln['name'])}</b><br/><font color='#64748B' size=7>{esc(ln['desc'])}</font>", td_style),
+                Paragraph(str(ln["qty"]), td_style),
+                Paragraph(f"£{ln['cost_unit']:,.2f}{suffix}", td_style),
+                Paragraph(f"£{ln['cost_total']:,.2f}{suffix}", td_bold),
+            ])
+        total = sum(ln["cost_total"] for ln in sel)
+        rows += [
+            [Paragraph("<b>Total (Ex VAT)</b>", td_bold), "", "", Paragraph(f"<b>£{total:,.2f}{suffix}</b>", td_bold)],
+            [Paragraph("VAT @ 20%", td_style), "", "", Paragraph(f"£{total * VAT_RATE:,.2f}{suffix}", td_style)],
+            [Paragraph("<b>Total (Inc VAT)</b>", td_bold), "", "", Paragraph(f"<b>£{total * (1 + VAT_RATE):,.2f}{suffix}</b>", td_bold)],
+        ]
+        t = Table(rows, colWidths=[290, 50, 100, 100])
+        t.setStyle(TableStyle([
+            ("BACKGROUND", (0, 0), (-1, 0), c_primary), ("BOX", (0, 0), (-1, -1), 1, c_border),
+            ("INNERGRID", (0, 0), (-1, -1), 0.5, c_border), ("BACKGROUND", (0, -3), (-1, -3), c_bg),
+            ("BACKGROUND", (0, -1), (-1, -1), c_bg),
+            ("TOPPADDING", (0, 0), (-1, -1), 4.5), ("BOTTOMPADDING", (0, 0), (-1, -1), 4.5),
+        ]))
+        story.extend([Paragraph(title, sec_head), Spacer(1, 4), t, Spacer(1, 10)])
+        return total
+
+    m_total = section("1. Monthly Recurring Charges (billed to partner)", "monthly", True)
+    o_total = section("2. One-Off Charges (billed to partner)", "one_off", False)
+
+    summ = Table([[Paragraph("<b>PARTNER COMMITMENT</b>", td_bold), Paragraph(
+        f"<b>Monthly:</b> £{m_total:,.2f} Ex VAT (£{m_total * (1 + VAT_RATE):,.2f} Inc VAT)<br/>"
+        f"<b>One-off:</b> £{o_total:,.2f} Ex VAT (£{o_total * (1 + VAT_RATE):,.2f} Inc VAT)<br/>"
+        f"<b>Month 1 payable to {POWERED_BY}:</b> <b>£{m_total + o_total:,.2f} Ex VAT "
+        f"(£{(m_total + o_total) * (1 + VAT_RATE):,.2f} Inc VAT)</b><br/>"
+        f"<b>{CONTRACT_MONTHS}-month contract value:</b> £{m_total * CONTRACT_MONTHS + o_total:,.2f} Ex VAT", td_style)]],
+        colWidths=[170, 370])
+    summ.setStyle(TableStyle([("BACKGROUND", (0, 0), (-1, -1), c_bg), ("BOX", (0, 0), (-1, -1), 1.5, c_primary),
+                              ("TOPPADDING", (0, 0), (-1, -1), 6), ("BOTTOMPADDING", (0, 0), (-1, -1), 6),
+                              ("LEFTPADDING", (0, 0), (-1, -1), 10), ("VALIGN", (0, 0), (-1, -1), "MIDDLE")]))
+    story += [summ, Spacer(1, 10)]
+
+    story.append(Paragraph(
+        "<b>Partner terms:</b> Prices shown are Novalink partner (wholesale) prices and are payable by the partner "
+        f"regardless of the price agreed with the end customer. Licences are subject to a {CONTRACT_MONTHS}-month minimum term. "
+        "Hardware is supplied at partner catalogue price. This document is an order summary, not a VAT invoice — "
+        "Novalink will issue a VAT invoice on acceptance.", note_style))
+    story.append(Spacer(1, 10))
+    sign = Table([
+        [Paragraph("<b>PARTNER AUTHORISATION:</b>", td_bold), Paragraph("<b>DATE:</b> ________________________", td_style)],
+        [Paragraph("Signature: _________________________________", td_style), Paragraph("Print Name: _____________________", td_style)],
+    ], colWidths=[330, 210])
+    sign.setStyle(TableStyle([("BOX", (0, 0), (-1, -1), 1, c_border), ("BACKGROUND", (0, 0), (-1, -1), c_bg),
+                              ("TOPPADDING", (0, 0), (-1, -1), 6), ("BOTTOMPADDING", (0, 0), (-1, -1), 6),
+                              ("LEFTPADDING", (0, 0), (-1, -1), 8)]))
+    story.append(sign)
+
+    def footer(canvas, d):
+        canvas.saveState()
+        canvas.setFont("Helvetica", 7)
+        canvas.setFillColor(colors.HexColor("#8A9099"))
+        canvas.drawString(27, 18, f"{POWERED_BY} partner order · {partner_plain} · confidential")
+        canvas.drawRightString(A4[0] - 27, 18, f"Page {d.page}")
+        canvas.restoreState()
+
+    doc.build(story, onFirstPage=footer, onLaterPages=footer)
+    buffer.seek(0)
+    return buffer.getvalue()
+
+
+def _pdf_footer(canvas, doc):
+    canvas.saveState()
+    canvas.setFont("Helvetica", 7)
+    canvas.setFillColor(colors.HexColor("#8A9099"))
+    canvas.drawString(27, 18, f"{APP_NAME} · hosted telephony powered by {POWERED_BY}")
+    canvas.drawRightString(A4[0] - 27, 18, f"Page {doc.page}")
+    canvas.setStrokeColor(colors.HexColor("#EA5624"))
+    canvas.setLineWidth(2)
+    canvas.line(27, 28, 60, 28)
+    canvas.restoreState()
+
+
+def generate_quotation_pdf(quote_meta, reseller, customer, num_users, hw_items, deployment_option):
     # Escape typed text so names like "Smith & Co" or "<Ltd>" can't break the PDF layout
     reseller = {k: esc(v) for k, v in reseller.items()}
     customer = {k: esc(v) for k, v in customer.items()}
     hw_items = [{**i, "name": esc(i["name"]), "desc": esc(i["desc"])} for i in hw_items]
 
     buffer = io.BytesIO()
-    doc = SimpleDocTemplate(
-        buffer,
-        pagesize=A4,  # UK standard (was US Letter)
-        rightMargin=27,
-        leftMargin=27,
-        topMargin=32,
-        bottomMargin=32,
-    )
+    doc = SimpleDocTemplate(buffer, pagesize=A4, rightMargin=27, leftMargin=27, topMargin=28, bottomMargin=40,
+                            title=f"{APP_NAME} quotation {quote_meta['ref']}", author=APP_NAME)
     styles = getSampleStyleSheet()
 
-    c_primary = colors.HexColor("#0F5A73")
+    c_primary = colors.HexColor("#EA5624")   # Refyn-IT orange
+    c_head = colors.HexColor("#1F232A")      # graphite table headers
     c_slate = colors.HexColor("#475569")
     c_dark = colors.HexColor("#0F172A")
-    c_bg = colors.HexColor("#F8FAFC")
-    c_border = colors.HexColor("#CBD5E1")
-    c_warning_bg = colors.HexColor("#FFFBEB")
-    c_warning_border = colors.HexColor("#F59E0B")
-    c_warning_text = colors.HexColor("#92400E")
+    c_bg = colors.HexColor("#F7F7F8")
+    c_border = colors.HexColor("#D4D9DF")
+    c_warning_bg = colors.HexColor("#FFF6F1")
+    c_warning_border = colors.HexColor("#EA5624")
+    c_warning_text = colors.HexColor("#7A2E12")
 
-    title_style = ParagraphStyle("DocTitle", parent=styles["Normal"], fontName="Helvetica-Bold", fontSize=19, leading=23, textColor=c_primary)
-    meta_style = ParagraphStyle("MetaText", parent=styles["Normal"], fontName="Helvetica", fontSize=8.5, leading=12, textColor=c_slate)
+    title_style = ParagraphStyle("DocTitle", parent=styles["Normal"], fontName="Helvetica-Bold", fontSize=15, leading=19, textColor=c_dark)
+    sub_style = ParagraphStyle("DocSub", parent=styles["Normal"], fontName="Helvetica", fontSize=8, leading=11, textColor=c_slate)
+    meta_style = ParagraphStyle("MetaText", parent=styles["Normal"], fontName="Helvetica", fontSize=8.5, leading=12, textColor=c_slate, alignment=2)
     sec_head = ParagraphStyle("SectionHeader", parent=styles["Normal"], fontName="Helvetica-Bold", fontSize=10.5, leading=14, textColor=c_primary)
     th_style = ParagraphStyle("TH", parent=styles["Normal"], fontName="Helvetica-Bold", fontSize=8.5, leading=11, textColor=colors.white)
     td_style = ParagraphStyle("TD", parent=styles["Normal"], fontName="Helvetica", fontSize=8.5, leading=11.5, textColor=c_dark)
@@ -724,20 +1176,29 @@ def generate_quotation_pdf(quote_meta, reseller, customer, num_users, hw_items):
 
     story = []
 
-    # Title & Metadata
+    # Header: logo + title | metadata
+    left_cell = []
+    if os.path.exists(BRAND_LOGO_PDF_FILE):
+        iw, ih = ImageReader(BRAND_LOGO_PDF_FILE).getSize()
+        logo_w = 170
+        left_cell.append(RLImage(BRAND_LOGO_PDF_FILE, width=logo_w, height=logo_w * ih / iw, hAlign="LEFT"))
+        left_cell.append(Spacer(1, 6))
+    left_cell.append(Paragraph("Telecoms Quotation", title_style))
+    left_cell.append(Paragraph(f"Hosted cloud telephony · powered by <b>{POWERED_BY}</b>", sub_style))
     hdr = Table(
         [[
-            Paragraph("<b>Novalink Telephony Quotation</b>", title_style),
+            left_cell,
             Paragraph(
                 f"<b>Reference:</b> {quote_meta['ref']}<br/>"
                 f"<b>Date:</b> {quote_meta['date']}<br/>"
-                f"<b>Contract Term:</b> <b>24 Months Minimum</b>",
+                f"<b>Contract Term:</b> <b>36 Months Minimum</b><br/>"
+                f"<b>Valid for:</b> 30 days",
                 meta_style,
             ),
         ]],
         colWidths=[350, 190],
     )
-    hdr.setStyle(TableStyle([("VALIGN", (0, 0), (-1, -1), "TOP"), ("ALIGN", (1, 0), (1, 0), "RIGHT")]))
+    hdr.setStyle(TableStyle([("VALIGN", (0, 0), (-1, -1), "BOTTOM"), ("LEFTPADDING", (0, 0), (0, 0), 0)]))
     story.append(hdr)
     story.append(Spacer(1, 8))
     story.append(HRFlowable(width="100%", thickness=1.5, color=c_primary, spaceAfter=10, spaceBefore=0))
@@ -749,7 +1210,7 @@ def generate_quotation_pdf(quote_meta, reseller, customer, num_users, hw_items):
         else ""
     )
     parties = [
-        [Paragraph("<b>SERVICE PROVIDER / PARTNER</b>", td_bold), Paragraph("<b>PROPOSED CUSTOMER</b>", td_bold)],
+        [Paragraph("<b>YOUR REFYN-IT CONTACT</b>", td_bold), Paragraph("<b>PROPOSED CUSTOMER</b>", td_bold)],
         [
             Paragraph(
                 f"<b>{reseller['company']}</b><br/>"
@@ -798,16 +1259,16 @@ def generate_quotation_pdf(quote_meta, reseller, customer, num_users, hw_items):
                 td_style,
             ),
             Paragraph(str(num_users), td_style),
-            Paragraph(f"£{LICENCE_MONTHLY_RATE:.2f} / mo", td_style),
-            Paragraph(f"£{mrc_total:.2f} / mo", td_bold),
+            Paragraph(f"£{LICENCE_MONTHLY_RATE:,.2f} / mo", td_style),
+            Paragraph(f"£{mrc_total:,.2f} / mo", td_bold),
         ],
-        [Paragraph("<b>Total Ongoing Monthly Costs (Ex VAT)</b>", td_bold), "", "", Paragraph(f"<b>£{mrc_total:.2f} / mo</b>", td_bold)],
-        [Paragraph("VAT @ 20%", td_style), "", "", Paragraph(f"£{mrc_vat:.2f} / mo", td_style)],
-        [Paragraph("<b>Total Ongoing Monthly Costs (Inc VAT)</b>", td_bold), "", "", Paragraph(f"<b>£{mrc_inc_vat:.2f} / mo</b>", td_bold)],
+        [Paragraph("<b>Total Ongoing Monthly Costs (Ex VAT)</b>", td_bold), "", "", Paragraph(f"<b>£{mrc_total:,.2f} / mo</b>", td_bold)],
+        [Paragraph("VAT @ 20%", td_style), "", "", Paragraph(f"£{mrc_vat:,.2f} / mo", td_style)],
+        [Paragraph("<b>Total Ongoing Monthly Costs (Inc VAT)</b>", td_bold), "", "", Paragraph(f"<b>£{mrc_inc_vat:,.2f} / mo</b>", td_bold)],
     ]
     t_mrc = Table(mrc_data, colWidths=[290, 50, 100, 100])
     t_mrc.setStyle(TableStyle([
-        ("BACKGROUND", (0, 0), (-1, 0), c_primary),
+        ("BACKGROUND", (0, 0), (-1, 0), c_head),
         ("BOX", (0, 0), (-1, -1), 1, c_border),
         ("INNERGRID", (0, 0), (-1, -1), 0.5, c_border),
         ("BACKGROUND", (0, 2), (-1, 2), c_bg),
@@ -822,40 +1283,52 @@ def generate_quotation_pdf(quote_meta, reseller, customer, num_users, hw_items):
     story.append(Paragraph("2. One-Off Upfront Costs", sec_head))
     story.append(Spacer(1, 4))
 
-    activation_total = num_users * ACTIVATION_FEE_PER_USER if num_users > 0 else 0.0
+    setup_total = num_users * SETUP_FEE_PER_USER if num_users > 0 else 0.0
+    deploy_total = deployment_fee(deployment_option, num_users)
     hw_total = sum(i["line_total"] for i in hw_items)
-    one_off_grand_total = activation_total + hw_total
+    one_off_grand_total = setup_total + deploy_total + hw_total
     one_off_vat = one_off_grand_total * VAT_RATE
     one_off_inc_vat = one_off_grand_total + one_off_vat
 
     upfront_data = [
         [Paragraph("Item / Description", th_style), Paragraph("Qty", th_style),
          Paragraph("Unit Price (Ex VAT)", th_style), Paragraph("Line Total (Ex VAT)", th_style)],
-        [
+    ]
+    if num_users > 0:
+        upfront_data.append([
             Paragraph(
-                "<b>Initial User Setup &amp; Activation</b><br/>"
-                "<font color='#64748B' size=7>System configuration, extension setup, user provisioning &amp; portal deployment.</font>",
+                "<b>User Setup &amp; Provisioning</b><br/>"
+                "<font color='#64748B' size=7>Extension setup, user provisioning &amp; licence activation.</font>",
                 td_style,
             ),
             Paragraph(str(num_users), td_style),
-            Paragraph(f"£{ACTIVATION_FEE_PER_USER:.2f}", td_style),
-            Paragraph(f"£{activation_total:.2f}", td_bold),
-        ],
-    ]
+            Paragraph(f"£{SETUP_FEE_PER_USER:,.2f}", td_style),
+            Paragraph(f"£{setup_total:,.2f}", td_bold),
+        ])
+        upfront_data.append([
+            Paragraph(
+                f"<b>{DEPLOYMENT_LABELS[deployment_option]}</b><br/>"
+                f"<font color='#64748B' size=7>{esc(DEPLOYMENT_DESCS[deployment_option])}.</font>",
+                td_style,
+            ),
+            Paragraph("1", td_style),
+            Paragraph(f"£{deploy_total:,.2f}", td_style),
+            Paragraph(f"£{deploy_total:,.2f}", td_bold),
+        ])
     for itm in hw_items:
         upfront_data.append([
             Paragraph(f"<b>{itm['name']}</b><br/><font color='#64748B' size=7>{itm['desc']}</font>", td_style),
             Paragraph(str(itm["qty"]), td_style),
-            Paragraph(f"£{itm['price']:.2f}", td_style),
-            Paragraph(f"£{itm['line_total']:.2f}", td_bold),
+            Paragraph(f"£{itm['price']:,.2f}", td_style),
+            Paragraph(f"£{itm['line_total']:,.2f}", td_bold),
         ])
-    upfront_data.append([Paragraph("<b>Total One-Off Upfront Costs (Ex VAT)</b>", td_bold), "", "", Paragraph(f"<b>£{one_off_grand_total:.2f}</b>", td_bold)])
-    upfront_data.append([Paragraph("VAT @ 20%", td_style), "", "", Paragraph(f"£{one_off_vat:.2f}", td_style)])
-    upfront_data.append([Paragraph("<b>Total One-Off Upfront Costs (Inc VAT)</b>", td_bold), "", "", Paragraph(f"<b>£{one_off_inc_vat:.2f}</b>", td_bold)])
+    upfront_data.append([Paragraph("<b>Total One-Off Upfront Costs (Ex VAT)</b>", td_bold), "", "", Paragraph(f"<b>£{one_off_grand_total:,.2f}</b>", td_bold)])
+    upfront_data.append([Paragraph("VAT @ 20%", td_style), "", "", Paragraph(f"£{one_off_vat:,.2f}", td_style)])
+    upfront_data.append([Paragraph("<b>Total One-Off Upfront Costs (Inc VAT)</b>", td_bold), "", "", Paragraph(f"<b>£{one_off_inc_vat:,.2f}</b>", td_bold)])
 
     t_upfront = Table(upfront_data, colWidths=[290, 50, 100, 100])
     t_upfront.setStyle(TableStyle([
-        ("BACKGROUND", (0, 0), (-1, 0), c_primary),
+        ("BACKGROUND", (0, 0), (-1, 0), c_head),
         ("BOX", (0, 0), (-1, -1), 1, c_border),
         ("INNERGRID", (0, 0), (-1, -1), 0.5, c_border),
         ("BACKGROUND", (0, -3), (-1, -3), c_bg),
@@ -872,9 +1345,9 @@ def generate_quotation_pdf(quote_meta, reseller, customer, num_users, hw_items):
     summary_data = [[
         Paragraph("<b>FINANCIAL SUMMARY</b>", td_bold),
         Paragraph(
-            f"<b>Ongoing Monthly Costs:</b> £{mrc_total:.2f} Ex VAT (£{mrc_inc_vat:.2f} Inc VAT / mo)<br/>"
-            f"<b>Total One-Off Upfront Costs:</b> £{one_off_grand_total:.2f} Ex VAT (£{one_off_inc_vat:.2f} Inc VAT)<br/>"
-            f"<b>Total Month 1 Investment:</b> <b>£{first_month_ex:.2f} Ex VAT (£{first_month_inc:.2f} Inc VAT)</b>",
+            f"<b>Ongoing Monthly Costs:</b> £{mrc_total:,.2f} Ex VAT (£{mrc_inc_vat:,.2f} Inc VAT / mo)<br/>"
+            f"<b>Total One-Off Upfront Costs:</b> £{one_off_grand_total:,.2f} Ex VAT (£{one_off_inc_vat:,.2f} Inc VAT)<br/>"
+            f"<b>Total Month 1 Investment:</b> <b>£{first_month_ex:,.2f} Ex VAT (£{first_month_inc:,.2f} Inc VAT)</b>",
             td_style,
         ),
     ]]
@@ -927,13 +1400,13 @@ def generate_quotation_pdf(quote_meta, reseller, customer, num_users, hw_items):
     ]))
     story.append(t_sign)
 
-    doc.build(story)
+    doc.build(story, onFirstPage=_pdf_footer, onLaterPages=_pdf_footer)
     buffer.seek(0)
     return buffer.getvalue()
 
 
 # ==========================================
-# 8. PAGE
+# 9. PAGE
 # ==========================================
 LICENCE_FEATURES = [
     "Mobile app (iOS / Android)",
@@ -947,7 +1420,9 @@ CATEGORIES = ["All hardware", "Yealink Phones", "Fanvil Phones", "Cordless DECT"
 
 
 def quote_signature():
-    return (st.session_state.get("num_licences", 0), tuple(sorted(st.session_state.basket.items())))
+    return (st.session_state.get("num_licences", 0), st.session_state.get("deployment"),
+            LICENCE_MONTHLY_RATE, SETUP_FEE_PER_USER, BASIC_DEPLOYMENT_FEE,
+            tuple(sorted(st.session_state.basket.items())))
 
 
 def product_image_html(product, max_h=124):
@@ -957,8 +1432,17 @@ def product_image_html(product, max_h=124):
     return f'<div class="ph">{icon("image", 26, 1.6)}<span>Image not found</span></div>'
 
 
+def advanced_band_label(users: int) -> str:
+    if users <= 5:
+        return "1–5 users"
+    if users <= 10:
+        return "6–10 users"
+    top = 10 + 10 * math.ceil((users - 10) / 10)
+    return f"{top - 9}–{top} users"
+
+
 hero_slot = st.empty()
-tab_builder, tab_customer_view = st.tabs(["Build quotation", "Customer view"])
+tab_builder, tab_customer_view, tab_admin = st.tabs(["Build quotation", "Customer view", "Admin · pricing"])
 
 # ---------------- TAB 1: BUILD QUOTATION ----------------
 with tab_builder:
@@ -980,24 +1464,55 @@ with tab_builder:
                     '<div class="sub">A complete unified-communications seat, enterprise features included.</div></div>'
                     f'<div class="nl-price">{money(LICENCE_MONTHLY_RATE)} <small>/ user / mo</small></div></div>'
                     f'<div class="nl-feats">{feats}</div>'
-                    f'<div class="nl-activation">{icon("zap", 14)}<span>One-off activation &amp; provisioning:'
-                    f' <b>{money(ACTIVATION_FEE_PER_USER)} per user</b>, billed in month 1</span></div></div>'
+                    f'<div class="nl-activation">{icon("zap", 14)}<span>One-off user setup &amp; provisioning:'
+                    f' <b>{money(SETUP_FEE_PER_USER)} per user</b>, billed in month 1</span></div></div>'
                 )
             with u2:
                 st.number_input("Number of users", min_value=0, max_value=500, step=1, key="num_licences")
                 users = st.session_state.num_licences
                 mrc = float(users) * LICENCE_MONTHLY_RATE
-                act = float(users) * ACTIVATION_FEE_PER_USER
+                setup = total_setup_fee(users)
                 render_html(
                     '<div class="nl-mini">'
                     f'<div><div class="l">Monthly</div><div class="v">{money(mrc)}</div><div class="s">{money(mrc * (1 + VAT_RATE))} inc VAT</div></div>'
-                    f'<div><div class="l">Activation</div><div class="v">{money(act)}</div><div class="s">one-off, ex VAT</div></div>'
+                    f'<div><div class="l">User setup</div><div class="v">{money(setup)}</div><div class="s">one-off, ex VAT</div></div>'
                     "</div>"
                 )
 
-        # ===== 02 · Hardware =====
+        # ===== 02 · Deployment =====
+        with st.container(key="card-deploy"):
+            section_header("02", "Deployment", "One-off · choose how the system goes live")
+            users = st.session_state.num_licences
+            basic_price = BASIC_DEPLOYMENT_FEE
+            adv_price = advanced_deployment_price(max(users, 1))
+            opts = [DEPLOY_BASIC, DEPLOY_ADVANCED]
+            d1, d2 = st.columns(2, gap="medium")
+            for col, opt in zip((d1, d2), opts):
+                selected = st.session_state.deployment == opt
+                with col:
+                    with st.container(key=f"dep-{'on' if selected else 'off'}-{opt}"):
+                        if opt == DEPLOY_BASIC:
+                            price_txt = money(basic_price)
+                            meta = [chip("Flat fee", "muted"), chip("Self-install", "muted")]
+                        else:
+                            price_txt = money(adv_price)
+                            meta = [chip(advanced_band_label(max(users, 1)), "accent"), chip("Fully managed", "muted")]
+                        render_html(
+                            f'<div class="rit-dep-top"><div class="rit-dep-name">{esc(DEPLOYMENT_LABELS[opt])}</div>'
+                            f'<div class="rit-dep-price">{price_txt}</div></div>'
+                            f'<div class="rit-dep-desc">{esc(DEPLOYMENT_DESCS[opt])}</div>'
+                            f'<div class="pe-chips" style="margin:10px 0 12px 0">{"".join(meta)}</div>'
+                        )
+                        st.button("Selected" if selected else "Choose this option", key=f"pick_{opt}",
+                                  type="primary" if selected else "secondary", disabled=selected,
+                                  on_click=lambda o=opt: st.session_state.update(deployment=o), **FULL_WIDTH)
+            if users == 0:
+                render_html(f'<div class="pe-hint">{icon("alert", 14)}<span>Deployment is added once you set the number of users.'
+                            ' Advanced pricing shown is for 1–5 users.</span></div>')
+
+        # ===== 03 · Hardware =====
         with st.container(key="card-hardware"):
-            section_header("02", "Handsets, headsets & hardware", "Optional · one-off upfront · tap + to add")
+            section_header("03", "Handsets, headsets & hardware", "Optional · one-off upfront · tap + to add")
             if hasattr(st, "segmented_control"):
                 chosen = st.segmented_control("Category", CATEGORIES, default="All hardware",
                                               key="hw_cat", label_visibility="collapsed")
@@ -1034,17 +1549,17 @@ with tab_builder:
                                 else '<div class="nl-sub">Not in quote</div>'
                             )
 
-        # ===== 03 · Details & PDF =====
+        # ===== 04 · Details & PDF =====
         with st.container(key="card-details"):
-            section_header("03", "Quote details & PDF", "Who it's from, who it's for, and where it's going")
+            section_header("04", "Quote details & PDF", "Who it's from, who it's for, and where it's going")
             with st.form(key="telephony_quote_form", border=False):
                 col_r, col_c = st.columns(2, gap="large")
                 with col_r:
-                    render_html(f'<div class="nl-form-h">{icon("building", 16)}Your company (service provider)</div>')
-                    r_company = st.text_input("Company / reseller name *", placeholder="e.g. Acme Communications Ltd")
+                    render_html(f'<div class="nl-form-h">{icon("building", 16)}Your company</div>')
+                    r_company = st.text_input("Company name *", value=SETTINGS["company_name"], placeholder="e.g. Refyn-IT")
                     r_contact = st.text_input("Your name / account manager *", placeholder="e.g. John Doe")
-                    r_email = st.text_input("Your email *", placeholder="e.g. sales@acmecomms.co.uk")
-                    r_phone = st.text_input("Your phone", placeholder="e.g. 0330 123 4567")
+                    r_email = st.text_input("Your email *", value=SETTINGS["company_email"], placeholder="e.g. sales@refyn-it.co.uk")
+                    r_phone = st.text_input("Your phone", value=SETTINGS["company_phone"], placeholder="e.g. 0330 123 4567")
                 with col_c:
                     render_html(f'<div class="nl-form-h">{icon("user", 16)}Proposed customer</div>')
                     c_company = st.text_input("Customer company *", placeholder="e.g. Apex Logistics Ltd")
@@ -1053,25 +1568,25 @@ with tab_builder:
                     c_phone = st.text_input("Customer phone", placeholder="e.g. 0161 123 4567")
                 render_html(f'<div class="nl-form-h" style="margin-top:10px">{icon("truck", 16)}Delivery / site address'
                             ' <span style="color:var(--faint);font-weight:500">(optional for initial quotes)</span></div>')
-                d1, d2, d3 = st.columns([2, 1, 1])
-                with d1:
+                a1, a2, a3 = st.columns([2, 1, 1])
+                with a1:
                     del_addr1 = st.text_input("Address line 1", placeholder="Building name or street")
-                with d2:
+                with a2:
                     del_city = st.text_input("Town / city", placeholder="Town / city")
-                with d3:
+                with a3:
                     del_postcode = st.text_input("Postcode", placeholder="Postcode")
                 generate_submitted = st.form_submit_button("Save quotation & generate PDF", type="primary", **FULL_WIDTH)
 
             if generate_submitted:
                 current_h_items = basket_items()
                 if not r_company or not r_contact or not r_email:
-                    st.error("Please complete your service provider details (company, name and email).")
+                    st.error("Please complete your company details (company, name and email).")
                 elif not c_company or not c_contact or not c_email:
                     st.error("Please fill in the customer's company, contact name and email.")
                 elif st.session_state.num_licences == 0 and not current_h_items:
                     st.error("Add at least one user licence or a piece of hardware before generating a quote.")
                 else:
-                    quote_ref = f"NL-{datetime.now().strftime('%y%m%d%H%M')}"
+                    quote_ref = f"{QUOTE_PREFIX}-{datetime.now().strftime('%y%m%d%H%M')}"
                     quote_date = datetime.now().strftime("%d %B %Y")
                     addr_parts = [p.strip() for p in [del_addr1, del_city, del_postcode] if p.strip()]
                     full_delivery = ", ".join(addr_parts) if addr_parts else "N/A"
@@ -1079,27 +1594,43 @@ with tab_builder:
                     customer_info = {"company": c_company, "name": c_contact, "email": c_email, "phone": c_phone,
                                      "delivery": full_delivery}
                     quote_meta = {"ref": quote_ref, "date": quote_date}
+                    dep_opt = st.session_state.deployment
 
                     pdf_bytes = generate_quotation_pdf(quote_meta, reseller_info, customer_info,
-                                                       st.session_state.num_licences, current_h_items)
+                                                       st.session_state.num_licences, current_h_items, dep_opt)
                     st.session_state.active_quote_pdf = pdf_bytes
                     st.session_state.active_quote_ref = quote_ref
                     st.session_state.active_quote_sig = quote_signature()
                     st.session_state.active_quote_customer = c_company
+                    st.session_state.active_quote_details = {
+                        "meta": quote_meta, "reseller": reseller_info, "customer": customer_info,
+                    }
+                    st.session_state.pop("partner_order_pdf", None)
 
                     hw_summary = ("; ".join(f"{i['name']} x{i['qty']}" for i in current_h_items)
                                   if current_h_items else "No Hardware (App/Licences Only)")
-                    one_off_combined = total_activation_fee() + total_hardware_capex()
+                    one_off_combined = total_one_off()
+                    margin = reseller_margin(st.session_state.num_licences, dep_opt)
+                    _ps = profit_summary(cost_sell_lines(st.session_state.num_licences, dep_opt, current_h_items))
                     record = {
-                        "Quote Ref": [quote_ref], "Date": [quote_date], "Brand": ["Novalink Telephony"],
-                        "Reseller": [r_company], "Customer Company": [c_company], "Customer Contact": [c_contact],
+                        "Quote Ref": [quote_ref], "Date": [quote_date], "Brand": [APP_NAME],
+                        "Reseller": [r_company], "Account Manager": [r_contact],
+                        "Customer Company": [c_company], "Customer Contact": [c_contact],
                         "Customer Email": [c_email], "Licences": [st.session_state.num_licences],
+                        "Licence Rate (£)": [f"{LICENCE_MONTHLY_RATE:.2f}"],
                         "Ongoing Monthly Costs Ex VAT (£)": [f"{total_monthly_licences():.2f}"],
                         "Ongoing Monthly Costs Inc VAT (£)": [f"{total_monthly_licences() * (1 + VAT_RATE):.2f}"],
-                        "Activation Fee Ex VAT (£)": [f"{total_activation_fee():.2f}"],
+                        "User Setup Ex VAT (£)": [f"{total_setup_fee():.2f}"],
+                        "Deployment Option": [DEPLOYMENT_LABELS[dep_opt]],
+                        "Deployment Ex VAT (£)": [f"{deployment_fee():.2f}"],
                         "Hardware Total Ex VAT (£)": [f"{total_hardware_capex():.2f}"],
                         "Total One-Off Costs Ex VAT (£)": [f"{one_off_combined:.2f}"],
                         "Total One-Off Costs Inc VAT (£)": [f"{one_off_combined * (1 + VAT_RATE):.2f}"],
+                        "Reseller Margin Monthly (£)": [f"{margin['monthly']:.2f}"],
+                        "Reseller Margin One-Off (£)": [f"{margin['one_off']:.2f}"],
+                        "Novalink Monthly Cost (£)": [f"{_ps['monthly_cost']:.2f}"],
+                        "Novalink One-Off Cost (£)": [f"{_ps['oneoff_cost']:.2f}"],
+                        "Contract Profit 36m (£)": [f"{_ps['contract_total_profit']:.2f}"],
                         "Hardware Summary": [hw_summary], "Delivery Address": [full_delivery],
                     }
                     df = pd.DataFrame(record)
@@ -1126,7 +1657,7 @@ with tab_builder:
         with st.container(key="card-summary"):
             users = st.session_state.num_licences
             mrc_ex = total_monthly_licences()
-            one_off_ex = total_activation_fee() + total_hardware_capex()
+            one_off_ex = total_one_off()
             month1_ex = mrc_ex + one_off_ex
             render_html(
                 '<div class="nl-sum-h"><div class="t">Live quote</div><span class="nl-live">Updating</span></div>'
@@ -1145,8 +1676,10 @@ with tab_builder:
                 render_html(
                     f'<div class="nl-line"><span class="n">Cloud user licence<small>× {users}</small></span>'
                     f'<span class="p">{money(mrc_ex)}/mo</span></div>'
-                    f'<div class="nl-line"><span class="n">Activation &amp; setup<small>× {users}</small></span>'
-                    f'<span class="p">{money(total_activation_fee())}</span></div>'
+                    f'<div class="nl-line"><span class="n">User setup &amp; provisioning<small>× {users}</small></span>'
+                    f'<span class="p">{money(total_setup_fee())}</span></div>'
+                    f'<div class="nl-line"><span class="n">{esc(DEPLOYMENT_LABELS[st.session_state.deployment])}</span>'
+                    f'<span class="p">{money(deployment_fee())}</span></div>'
                 )
             for item in items:
                 with st.container(key=f"sumline-{item['id']}"):
@@ -1177,16 +1710,18 @@ with tab_builder:
                     **FULL_WIDTH,
                 )
             else:
-                st.caption("Fill in step 03 to generate the official PDF.")
+                st.caption("Fill in step 04 to generate the official PDF.")
 
 # ---------------- TAB 2: CUSTOMER VIEW ----------------
 with tab_customer_view:
     users = st.session_state.get("num_licences", 0)
     mrc_ex = total_monthly_licences()
     mrc_vat = mrc_ex * VAT_RATE
-    act_ex = total_activation_fee()
+    setup_ex = total_setup_fee()
+    dep_ex = deployment_fee()
+    dep_opt = st.session_state.deployment
     hw_ex = total_hardware_capex()
-    one_off_ex = act_ex + hw_ex
+    one_off_ex = setup_ex + dep_ex + hw_ex
     one_off_vat = one_off_ex * VAT_RATE
     month1_ex = mrc_ex + one_off_ex
     items = basket_items()
@@ -1196,14 +1731,15 @@ with tab_customer_view:
     with mid:
         with st.container(key="card-cv-head"):
             render_html(
+                f'<div class="rit-brandrow">{brand_logo_html(34)}{powered_by_html()}</div>'
                 '<div class="nl-prop"><div>'
                 '<div class="k">Proposal' + (f" · prepared for {esc(for_whom)}" if for_whom else "") + '</div>'
                 '<div class="t">Your cloud <span>telephony solution</span></div>'
                 '<div class="s">Unified communications for every user, on desk, laptop and mobile.</div></div>'
                 f'<div>{chip(datetime.now().strftime("%d %B %Y"), "accent")}</div></div>'
                 '<div class="nl-kpis">'
-                f'<div class="nl-kpi" style="--c:#7C83FF"><div class="l">Ongoing monthly</div><div class="v">{money(mrc_ex)} <small>ex VAT</small></div><div class="i">{money(mrc_ex + mrc_vat)} / mo inc VAT</div></div>'
-                f'<div class="nl-kpi" style="--c:#38D6F5"><div class="l">One-off upfront</div><div class="v">{money(one_off_ex)} <small>ex VAT</small></div><div class="i">{money(one_off_ex + one_off_vat)} inc VAT</div></div>'
+                f'<div class="nl-kpi" style="--c:#EA5624"><div class="l">Ongoing monthly</div><div class="v">{money(mrc_ex)} <small>ex VAT</small></div><div class="i">{money(mrc_ex + mrc_vat)} / mo inc VAT</div></div>'
+                f'<div class="nl-kpi" style="--c:#D4D9DF"><div class="l">One-off upfront</div><div class="v">{money(one_off_ex)} <small>ex VAT</small></div><div class="i">{money(one_off_ex + one_off_vat)} inc VAT</div></div>'
                 f'<div class="nl-kpi" style="--c:#34D399"><div class="l">Month 1 investment</div><div class="v">{money(month1_ex)} <small>ex VAT</small></div><div class="i">{money(month1_ex * (1 + VAT_RATE))} inc VAT</div></div>'
                 "</div>"
             )
@@ -1226,13 +1762,19 @@ with tab_customer_view:
                 render_html('<div class="nl-empty">No user licences selected yet.</div>')
 
         with st.container(key="card-cv-oneoff"):
-            section_header("2", "One-off upfront costs", "Activation and hardware, billed once")
-            rows = (
-                '<tr><td><div style="display:flex;gap:12px;align-items:center"><div class="thumb">'
-                f'<span style="color:#7C83FF">{icon("zap", 18)}</span></div><div><b>User setup &amp; activation</b>'
-                '<div class="desc">Provisioning, portal setup and licence deployment</div></div></div></td>'
-                f'<td class="num">{users}</td><td class="num">{money(ACTIVATION_FEE_PER_USER)}</td><td class="num"><b>{money(act_ex)}</b></td></tr>'
-            )
+            section_header("2", "One-off upfront costs", "Setup, deployment and hardware, billed once")
+            rows = ""
+            if users > 0:
+                rows += (
+                    '<tr><td><div style="display:flex;gap:12px;align-items:center"><div class="thumb">'
+                    f'<span style="color:#EA5624">{icon("zap", 18)}</span></div><div><b>User setup &amp; provisioning</b>'
+                    '<div class="desc">Extension setup, user provisioning and licence activation</div></div></div></td>'
+                    f'<td class="num">{users}</td><td class="num">{money(SETUP_FEE_PER_USER)}</td><td class="num"><b>{money(setup_ex)}</b></td></tr>'
+                    '<tr><td><div style="display:flex;gap:12px;align-items:center"><div class="thumb">'
+                    f'<span style="color:#EA5624">{icon("truck", 18)}</span></div><div><b>{esc(DEPLOYMENT_LABELS[dep_opt])}</b>'
+                    f'<div class="desc">{esc(DEPLOYMENT_DESCS[dep_opt])}</div></div></div></td>'
+                    f'<td class="num">1</td><td class="num">{money(dep_ex)}</td><td class="num"><b>{money(dep_ex)}</b></td></tr>'
+                )
             for item in items:
                 uri = get_base64_image(item.get("image"))
                 thumb = f'<img src="{uri}" alt="">' if uri else f'<span style="color:#94A3B8">{icon("phone", 18)}</span>'
@@ -1242,17 +1784,248 @@ with tab_customer_view:
                     f'<td class="num">{item["qty"]}</td><td class="num">{money(item["price"])}</td>'
                     f'<td class="num"><b>{money(item["line_total"])}</b></td></tr>'
                 )
+            if not rows:
+                render_html('<div class="nl-empty">No one-off items yet.</div>')
+            else:
+                render_html(
+                    '<table class="nl-table"><thead><tr><th>Item</th><th class="num">Qty</th>'
+                    '<th class="num">Unit (ex VAT)</th><th class="num">Total (ex VAT)</th></tr></thead><tbody>'
+                    + rows
+                    + f'<tr class="sub"><td colspan="3">Subtotal (ex VAT)</td><td class="num">{money(one_off_ex)}</td></tr>'
+                    f'<tr class="sub"><td colspan="3">VAT @ 20%</td><td class="num">{money(one_off_vat)}</td></tr>'
+                    f'<tr class="grand"><td colspan="3">Total one-off (inc VAT)</td><td class="num">{money(one_off_ex + one_off_vat)}</td></tr>'
+                    "</tbody></table>"
+                )
             render_html(
-                '<table class="nl-table"><thead><tr><th>Item</th><th class="num">Qty</th>'
-                '<th class="num">Unit (ex VAT)</th><th class="num">Total (ex VAT)</th></tr></thead><tbody>'
-                + rows
-                + f'<tr class="sub"><td colspan="3">Subtotal (ex VAT)</td><td class="num">{money(one_off_ex)}</td></tr>'
-                f'<tr class="sub"><td colspan="3">VAT @ 20%</td><td class="num">{money(one_off_vat)}</td></tr>'
-                f'<tr class="grand"><td colspan="3">Total one-off (inc VAT)</td><td class="num">{money(one_off_ex + one_off_vat)}</td></tr>'
-                "</tbody></table>"
                 '<div class="nl-note"><b>Commercial notes:</b> Quotation valid for 30 calendar days.'
-                ' User licences are subject to a 36-month minimum term.</div>'
+                f' User licences are subject to a 36-month minimum term. {esc(APP_NAME)} hosted telephony is powered by {esc(POWERED_BY)}.</div>'
             )
+
+# ---------------- TAB 3: ADMIN · PRICING ----------------
+with tab_admin:
+    admin_pw = _secret("ADMIN_PASSWORD")
+    _, amid, _ = st.columns([0.06, 1, 0.06])
+    with amid:
+        if not admin_pw:
+            st.error("ADMIN_PASSWORD isn't set in Streamlit Secrets, so pricing admin is locked.")
+        elif not st.session_state.get("admin_ok"):
+            _, lc, _ = st.columns([1, 1.2, 1])
+            with lc:
+                with st.container(key="card-admin-login"):
+                    render_html(f'<div class="nl-form-h">{icon("lock", 16)}Admin access</div>'
+                                '<div class="rit-admin-note">Pricing changes are restricted. Enter the admin password.</div>')
+                    with st.form("admin_login", border=False):
+                        a_try = st.text_input("Admin password", type="password")
+                        a_sub = st.form_submit_button("Unlock pricing", type="primary", **FULL_WIDTH)
+                    if a_sub:
+                        if hmac.compare_digest(a_try.encode("utf-8"), str(admin_pw).encode("utf-8")):
+                            st.session_state.admin_ok = True
+                            st.rerun()
+                        else:
+                            st.error("Incorrect admin password.")
+        else:
+            lk1, lk2 = st.columns([5, 1])
+            with lk1:
+                render_html(f'<div class="rit-admin-bar">{icon("lock", 14)}<span>Admin area · internal to '
+                            f'{esc(SETTINGS["company_name"] or "Refyn-IT")} — never shown to customers</span></div>')
+            with lk2:
+                if st.button("Lock admin", key="admin_lock", **FULL_WIDTH):
+                    st.session_state.admin_ok = False
+                    st.rerun()
+
+            sub_profit, sub_order, sub_pricing = st.tabs(["Profit", "Novalink order", "Pricing settings"])
+
+            a_users = st.session_state.get("num_licences", 0)
+            a_dep = st.session_state.deployment
+            a_items = basket_items()
+            a_lines = cost_sell_lines(a_users, a_dep, a_items)
+            ps = profit_summary(a_lines)
+            details = st.session_state.get("active_quote_details")
+
+            # ===== PROFIT =====
+            with sub_profit:
+                with st.container(key="card-admin-profit"):
+                    section_header("£", "Your profit on this deal",
+                                   f"Your sell price minus what you pay {POWERED_BY} · {CONTRACT_MONTHS}-month contract")
+                    if not a_lines:
+                        render_html('<div class="nl-empty">Build a quote first (users, deployment, hardware) and your profit appears here.</div>')
+                    else:
+                        who = details["customer"]["company"] if details else "the current quote"
+                        render_html(
+                            f'<div class="rit-deal">{chip("Deal", "muted")}<b>{esc(who)}</b>'
+                            f'<span>{a_users} users · {esc(DEPLOYMENT_LABELS[a_dep])}</span></div>'
+                            '<div class="rit-pkpis">'
+                            f'<div class="nl-kpi" style="--c:#EA5624"><div class="l">Monthly profit</div><div class="v">{money(ps["monthly_profit"])}</div>'
+                            f'<div class="i">{money(ps["monthly_sell"])} billed − {money(ps["monthly_cost"])} to {POWERED_BY}</div></div>'
+                            f'<div class="nl-kpi" style="--c:#FF9A5A"><div class="l">Annual profit</div><div class="v">{money(ps["annual_profit"])}</div>'
+                            '<div class="i">Recurring, 12 months</div></div>'
+                            f'<div class="nl-kpi" style="--c:#D4D9DF"><div class="l">One-off profit</div><div class="v">{money(ps["oneoff_profit"])}</div>'
+                            '<div class="i">Setup, deployment &amp; hardware</div></div>'
+                            f'<div class="nl-kpi rit-hero-kpi" style="--c:#34D399"><div class="l">{CONTRACT_MONTHS}-month contract profit</div>'
+                            f'<div class="v">{money(ps["contract_total_profit"])}</div>'
+                            f'<div class="i">{money(ps["contract_recurring_profit"])} recurring + {money(ps["oneoff_profit"])} one-off'
+                            f' · {ps["margin_pct"]:.1f}% margin</div></div>'
+                            '</div>'
+                        )
+                        rows = ""
+                        for kind, label in (("monthly", "Monthly recurring"), ("one_off", "One-off")):
+                            sel = [ln for ln in a_lines if ln["kind"] == kind]
+                            if not sel:
+                                continue
+                            rows += f'<tr class="grp"><td colspan="5">{label}</td></tr>'
+                            for ln in sel:
+                                pcls = "pos" if ln["profit"] > 0 else "zero"
+                                rows += (
+                                    f'<tr><td><b>{esc(ln["name"])}</b></td><td class="num">{ln["qty"]}</td>'
+                                    f'<td class="num">{money(ln["cost_unit"])}</td><td class="num">{money(ln["sell_unit"])}</td>'
+                                    f'<td class="num"><span class="rit-p {pcls}">{money(ln["profit"])}</span></td></tr>'
+                                )
+                        render_html(
+                            '<table class="nl-table"><thead><tr><th>Line</th><th class="num">Qty</th>'
+                            f'<th class="num">You pay {POWERED_BY}</th><th class="num">You charge</th><th class="num">Profit</th></tr></thead>'
+                            f'<tbody>{rows}'
+                            f'<tr class="sub"><td colspan="4">Contract revenue ({CONTRACT_MONTHS} months, ex VAT)</td><td class="num">{money(ps["contract_revenue"])}</td></tr>'
+                            f'<tr class="sub"><td colspan="4">Paid to {POWERED_BY} ({CONTRACT_MONTHS} months, ex VAT)</td><td class="num">{money(ps["contract_cost"])}</td></tr>'
+                            f'<tr class="grand"><td colspan="4">Contract profit (ex VAT)</td><td class="num">{money(ps["contract_total_profit"])}</td></tr>'
+                            '</tbody></table>'
+                            '<div class="nl-note">Hardware is currently supplied at catalogue price, so it carries no profit. '
+                            'Advanced system deployment is a fixed Novalink price, so it also carries no profit. '
+                            'Raise your licence, setup or Basic build prices under <b>Pricing settings</b> to grow your margin.</div>'
+                        )
+
+            # ===== NOVALINK ORDER =====
+            with sub_order:
+                with st.container(key="card-admin-order"):
+                    section_header("⇄", f"{POWERED_BY} partner order",
+                                   f"What you pay {POWERED_BY} for this deal · your sell prices are never included")
+                    if not a_lines:
+                        render_html('<div class="nl-empty">Build a quote first, then create the partner order here.</div>')
+                    else:
+                        render_html(
+                            '<div class="nl-kpis" style="margin-top:0">'
+                            f'<div class="nl-kpi" style="--c:#38BDF8"><div class="l">Monthly to {POWERED_BY}</div><div class="v">{money(ps["monthly_cost"])}</div>'
+                            f'<div class="i">{money(ps["monthly_cost"] * (1 + VAT_RATE))} inc VAT</div></div>'
+                            f'<div class="nl-kpi" style="--c:#38BDF8"><div class="l">One-off to {POWERED_BY}</div><div class="v">{money(ps["oneoff_cost"])}</div>'
+                            f'<div class="i">{money(ps["oneoff_cost"] * (1 + VAT_RATE))} inc VAT</div></div>'
+                            f'<div class="nl-kpi" style="--c:#38BDF8"><div class="l">Month 1 payable</div><div class="v">{money(ps["monthly_cost"] + ps["oneoff_cost"])}</div>'
+                            f'<div class="i">{money((ps["monthly_cost"] + ps["oneoff_cost"]) * (1 + VAT_RATE))} inc VAT</div></div>'
+                            '</div>'
+                        )
+                        orow = "".join(
+                            f'<tr><td><b>{esc(ln["name"])}</b><div class="desc">{esc(ln["desc"])}</div></td>'
+                            f'<td class="num">{ln["qty"]}</td><td class="num">{money(ln["cost_unit"])}{" / mo" if ln["kind"] == "monthly" else ""}</td>'
+                            f'<td class="num"><b>{money(ln["cost_total"])}{" / mo" if ln["kind"] == "monthly" else ""}</b></td></tr>'
+                            for ln in a_lines
+                        )
+                        render_html(
+                            '<table class="nl-table" style="margin-top:14px !important"><thead><tr><th>Item</th><th class="num">Qty</th>'
+                            '<th class="num">Partner price</th><th class="num">Total (ex VAT)</th></tr></thead>'
+                            f'<tbody>{orow}</tbody></table>'
+                        )
+                        if not details:
+                            render_html(f'<div class="pe-hint">{icon("alert", 14)}<span>Generate the customer quote first '
+                                        '(Build quotation → step 04). The partner order uses the same customer and reference.</span></div>')
+                        else:
+                            if st.session_state.get("active_quote_sig") != quote_signature():
+                                st.warning("The quote has changed since the customer PDF was made. "
+                                           "Regenerate the customer quote first so both documents match.")
+                            else:
+                                if st.button(f"Create {POWERED_BY} partner order PDF", type="primary",
+                                             key="mk_partner", **FULL_WIDTH):
+                                    cref = details["meta"]["ref"]
+                                    order_meta = {"ref": cref.replace(QUOTE_PREFIX, "NLP", 1), "customer_ref": cref,
+                                                  "date": datetime.now().strftime("%d %B %Y")}
+                                    st.session_state.partner_order_pdf = generate_partner_order_pdf(
+                                        order_meta, details["reseller"], details["customer"], a_lines)
+                                    st.session_state.partner_order_ref = order_meta["ref"]
+                                if st.session_state.get("partner_order_pdf"):
+                                    st.download_button(
+                                        f"Download {st.session_state.partner_order_ref}.pdf",
+                                        data=st.session_state.partner_order_pdf,
+                                        file_name=f"{st.session_state.partner_order_ref}.pdf",
+                                        mime="application/pdf", key="dl_partner", **FULL_WIDTH)
+                                    st.caption(f"Send this to {POWERED_BY} to place the order. "
+                                               "It shows only partner prices and the end customer's name and site.")
+
+            # ===== PRICING SETTINGS =====
+            with sub_pricing:
+                with st.container(key="card-admin"):
+                    section_header("⚙", "Pricing & quote settings",
+                                   "Your sell prices. Floors are set by Novalink — you can go up, never below.")
+                    storage = "GitHub (permanent)" if _gh_config() else "Local file (resets on app restart)"
+                    render_html(
+                        '<div class="pe-chips" style="margin-bottom:14px">'
+                        + chip(f"Storage: {storage}", "good" if _gh_config() else "warn")
+                        + (chip(f"Last saved {SETTINGS['updated']}", "muted") if SETTINGS["updated"] else "")
+                        + "</div>"
+                    )
+
+                    _v = SETTINGS["updated"] or "0"
+                    with st.form("admin_pricing", border=False):
+                        render_html('<div class="rit-admin-h">Monthly</div>')
+                        p1, p2 = st.columns([1, 1.4], gap="large")
+                        with p1:
+                            new_lic = st.number_input("Licence sell price (£ / user / month)", min_value=FLOOR_LICENCE_MONTHLY,
+                                                      value=float(LICENCE_MONTHLY_RATE), step=0.50, format="%.2f", key=f"adm_lic_{_v}")
+                        with p2:
+                            render_html(f'<div class="rit-floor">{icon("lock", 13)}Floor {money(FLOOR_LICENCE_MONTHLY)} / user / month.'
+                                        ' Everything above is your margin.</div>')
+
+                        render_html('<div class="rit-admin-h">One-off</div>')
+                        p3, p4 = st.columns([1, 1.4], gap="large")
+                        with p3:
+                            new_setup = st.number_input("User setup fee (£ / user, one-off)", min_value=FLOOR_SETUP_PER_USER,
+                                                        value=float(SETUP_FEE_PER_USER), step=1.00, format="%.2f", key=f"adm_setup_{_v}")
+                        with p4:
+                            render_html(f'<div class="rit-floor">{icon("lock", 13)}Floor {money(FLOOR_SETUP_PER_USER)} per user.'
+                                        ' New quotes default to your saved price.</div>')
+                        p5, p6 = st.columns([1, 1.4], gap="large")
+                        with p5:
+                            new_basic = st.number_input("Basic system build (£, one-off)", min_value=FLOOR_BASIC_DEPLOYMENT,
+                                                        value=float(BASIC_DEPLOYMENT_FEE), step=5.00, format="%.2f", key=f"adm_basic_{_v}")
+                        with p6:
+                            render_html(f'<div class="rit-floor">{icon("lock", 13)}Floor {money(FLOOR_BASIC_DEPLOYMENT)}.'
+                                        ' Device activation, self-installation.</div>')
+
+                        new_default = st.radio("Default deployment on new quotes", [DEPLOY_BASIC, DEPLOY_ADVANCED],
+                                               index=0 if SETTINGS["default_deployment"] == DEPLOY_BASIC else 1,
+                                               format_func=lambda o: DEPLOYMENT_LABELS[o], horizontal=True)
+
+                        render_html('<div class="rit-admin-h">Quote defaults</div>')
+                        q1, q2, q3 = st.columns(3)
+                        with q1:
+                            new_cname = st.text_input("Company name on quotes", value=SETTINGS["company_name"])
+                        with q2:
+                            new_cemail = st.text_input("Default sales email", value=SETTINGS["company_email"])
+                        with q3:
+                            new_cphone = st.text_input("Default sales phone", value=SETTINGS["company_phone"])
+
+                        save = st.form_submit_button("Save pricing", type="primary", **FULL_WIDTH)
+
+                    if save:
+                        ok, msg = save_settings({
+                            "licence_monthly": new_lic, "setup_per_user": new_setup, "basic_deployment": new_basic,
+                            "default_deployment": new_default, "company_name": new_cname,
+                            "company_email": new_cemail, "company_phone": new_cphone,
+                        })
+                        st.session_state.admin_flash = ("success" if ok else "warning", msg)
+                        st.rerun()
+                    flash = st.session_state.pop("admin_flash", None)
+                    if flash:
+                        getattr(st, flash[0])(flash[1])
+
+                # Advanced tariff (locked) + margin preview
+                with st.container(key="card-admin-tariff"):
+                    section_header("🔒", "Advanced system deployment", "Fixed Novalink tariff · not editable")
+                    bands = [(1, 5), (6, 10), (11, 20), (21, 30), (31, 40), (41, 50)]
+                    trows = "".join(
+                        f'<tr><td>{a}–{b} users</td><td class="num"><b>{money(advanced_deployment_price(b))}</b></td></tr>'
+                        for a, b in bands
+                    )
+                    render_html(
+                        '<table class="nl-table"><thead><tr><th>Users on system</th><th class="num">Price (ex VAT)</th></tr></thead>'
+                        f'<tbody>{trows}<tr class="sub"><td colspan="2">…then +£750 for each further band of 10 users.</td></tr></tbody></table>'
+                    )
 
 # ---------------- Hero (rendered last so the stepper reflects this run) ----------------
 if st.session_state.get("num_licences", 0) == 0 and not st.session_state.basket:
@@ -1260,7 +2033,7 @@ if st.session_state.get("num_licences", 0) == 0 and not st.session_state.basket:
 elif "active_quote_pdf" in st.session_state and st.session_state.get("active_quote_sig") == quote_signature():
     _step = 5
 elif st.session_state.basket:
-    _step = 3
+    _step = 4
 else:
-    _step = 2
+    _step = 3
 render_html(hero_html(_step), target=hero_slot)
