@@ -507,6 +507,47 @@ NOVALINK_CSS = """
 .rit-p.zero { color: var(--faint); }
 .nl-table tr.grp td { font-size: 0.68rem; font-weight: 700; letter-spacing: .1em; text-transform: uppercase; color: var(--accent-2);
   padding: 14px 12px 6px 12px; border-bottom: 1px solid var(--border); }
+
+/* Partner offer */
+[class*="st-key-card-offer-"] { position: relative; overflow: hidden; border-radius: var(--radius); padding: 18px 22px 16px 22px;
+  margin-bottom: 18px; border: 1px dashed rgba(234,86,36,.55) !important;
+  background: linear-gradient(120deg, rgba(234,86,36,.10), rgba(255,154,90,.04) 60%, rgba(20,22,28,.9)); }
+.st-key-card-offer-on { border-style: solid !important; border-color: rgba(234,86,36,.8) !important;
+  background: linear-gradient(120deg, rgba(234,86,36,.26), rgba(255,154,90,.10) 55%, rgba(20,22,28,.92)) !important;
+  box-shadow: 0 0 0 1px rgba(234,86,36,.25), 0 24px 44px -26px rgba(234,86,36,.8); }
+.rit-offer-k { display: inline-flex; align-items: center; gap: 6px; font-size: 0.7rem; font-weight: 800; letter-spacing: .12em;
+  text-transform: uppercase; color: #0B0C10; background: var(--grad); border-radius: 999px; padding: 4px 10px; }
+.rit-offer-t { font-size: 1.25rem; font-weight: 800; font-style: italic; color: var(--text); letter-spacing: -0.02em; margin-top: 8px; }
+.rit-offer-s { font-size: 0.8rem; color: var(--muted); margin-top: 3px; line-height: 1.45; }
+[class*="st-key-card-offer-"] [data-testid="stCheckbox"] label p, [class*="st-key-card-offer-"] .stToggle label p {
+  font-weight: 700 !important; color: var(--text) !important; text-transform: none !important; letter-spacing: 0 !important; font-size: 0.86rem !important; }
+.rit-offer-save { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin-top: 12px; }
+.rit-offer-save > div { background: rgba(11,12,16,.55); border: 1px solid rgba(234,86,36,.35); border-radius: 12px; padding: 10px 12px; }
+.rit-offer-save b { display: block; font-size: 1.15rem; font-weight: 800; color: var(--accent-2); letter-spacing: -0.02em; }
+.rit-offer-save span { font-size: 0.7rem; color: var(--muted); text-transform: uppercase; letter-spacing: .06em; font-weight: 600; }
+.rit-was { color: var(--faint); font-weight: 600; font-size: 0.82em; margin-right: 6px; text-decoration-thickness: 1.5px; }
+.nl-price .rit-was { color: rgba(11,12,16,.55); }
+.rit-save-line .n { color: var(--accent-2) !important; font-weight: 700; display: inline-flex; align-items: center; gap: 6px; }
+.rit-save-line .p { color: var(--accent-2) !important; }
+.rit-save-line .p small { color: var(--faint); font-weight: 500; }
+.rit-cv-offer { display: flex; align-items: center; gap: 20px; margin-top: 20px; padding: 18px 20px; border-radius: 16px;
+  background: linear-gradient(120deg, rgba(234,86,36,.28), rgba(255,154,90,.10) 60%, rgba(20,22,28,.6));
+  border: 1px solid rgba(234,86,36,.7); box-shadow: 0 24px 50px -28px rgba(234,86,36,.9); flex-wrap: wrap; }
+.rit-cv-offer .burst { width: 88px; height: 88px; flex-shrink: 0; display: grid; place-content: center; text-align: center;
+  background: var(--grad); color: #0B0C10; transform: rotate(-8deg);
+  clip-path: polygon(50% 0%, 61% 11%, 75% 6%, 79% 21%, 94% 25%, 89% 39%, 100% 50%, 89% 61%, 94% 75%, 79% 79%, 75% 94%, 61% 89%, 50% 100%, 39% 89%, 25% 94%, 21% 79%, 6% 75%, 11% 61%, 0% 50%, 11% 39%, 6% 25%, 21% 21%, 25% 6%, 39% 11%); }
+.rit-cv-offer .burst .pct { font-size: 1.45rem; font-weight: 900; line-height: 1; font-style: italic; }
+.rit-cv-offer .burst .off { font-size: 0.7rem; font-weight: 800; letter-spacing: .15em; }
+.rit-cv-offer .body { flex: 1; min-width: 240px; }
+.rit-cv-offer .k { font-size: 0.72rem; font-weight: 800; letter-spacing: .14em; text-transform: uppercase; color: var(--accent-2); }
+.rit-cv-offer .t { font-size: 1.3rem; font-weight: 800; font-style: italic; color: var(--text); margin-top: 4px; letter-spacing: -0.02em; }
+.rit-cv-offer .s { font-size: 0.86rem; color: var(--muted); margin-top: 4px; }
+.rit-cv-offer .s b { color: var(--text); }
+.rit-cv-offer .total { text-align: right; }
+.rit-cv-offer .total .l { font-size: 0.7rem; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); }
+.rit-cv-offer .total .v { font-size: 2rem; font-weight: 900; color: var(--accent-2); letter-spacing: -0.03em; line-height: 1.1; }
+.rit-cv-offer .total .i { font-size: 0.76rem; color: var(--faint); }
+@media (max-width: 800px) { .rit-offer-save { grid-template-columns: 1fr; } .rit-cv-offer .total { text-align: left; } }
 </style>
 """
 
@@ -893,6 +934,83 @@ def save_settings(new_settings: dict):
 
 SETTINGS = load_settings()
 LICENCE_MONTHLY_RATE = SETTINGS["licence_monthly"]
+
+# ---- Partner offer (controlled by NOVALINK, not the reseller) -----------
+# Master switch lives in Streamlit Secrets so it can be changed without
+# touching code, and the reseller's admin password can't change it:
+#
+#   [partner_offer]
+#   enabled = true            # false = offer disappears everywhere
+#   name = "Launch Offer"
+#   licence_pct = 25          # % off user licences (customer AND Novalink cost)
+#   deployment_pct = 25       # % off deployment (customer AND Novalink cost)
+#   ends = "2026-12-31"       # optional - switches itself off after this date
+#
+# If there's no [partner_offer] section in Secrets, these defaults are used:
+PARTNER_OFFER_DEFAULTS = {
+    "enabled": True,
+    "name": "Launch Offer",
+    "licence_pct": 25,
+    "deployment_pct": 25,
+    "ends": "",
+}
+
+
+def load_partner_offer() -> dict:
+    cfg = dict(PARTNER_OFFER_DEFAULTS)
+    try:
+        sec = st.secrets.get("partner_offer", None)
+        if sec:
+            cfg.update({k: sec[k] for k in sec.keys()})
+    except Exception:
+        pass
+
+    def pct(v):
+        try:
+            return max(0.0, min(90.0, float(v)))
+        except (TypeError, ValueError):
+            return 0.0
+
+    enabled = str(cfg.get("enabled", False)).strip().lower() in ("true", "1", "yes", "on")
+    ends_txt, expired = str(cfg.get("ends") or "").strip(), False
+    if ends_txt:
+        try:
+            end_date = datetime.strptime(ends_txt, "%Y-%m-%d").date()
+            expired = datetime.now().date() > end_date
+            ends_txt = end_date.strftime("%d %B %Y")
+        except ValueError:
+            ends_txt = ""
+    lic, dep = pct(cfg.get("licence_pct")), pct(cfg.get("deployment_pct"))
+    return {
+        "active": enabled and not expired and (lic > 0 or dep > 0),
+        "name": str(cfg.get("name") or "Partner Offer"),
+        "licence_pct": lic, "deployment_pct": dep,
+        "ends": ends_txt, "expired": expired,
+    }
+
+
+OFFER = load_partner_offer()
+
+
+def pct_txt(p):
+    return f"{p:g}%"
+
+
+def offer_on() -> bool:
+    """True when Novalink has the offer live AND the reseller switched it on for this deal."""
+    return OFFER["active"] and bool(st.session_state.get("offer_on", False))
+
+
+def lic_disc():
+    return OFFER["licence_pct"] / 100 if offer_on() else 0.0
+
+
+def dep_disc():
+    return OFFER["deployment_pct"] / 100 if offer_on() else 0.0
+
+
+def disc(price, d):
+    return round(price * (1 - d), 2)
 SETUP_FEE_PER_USER = SETTINGS["setup_per_user"]
 BASIC_DEPLOYMENT_FEE = SETTINGS["basic_deployment"]
 
@@ -901,6 +1019,8 @@ BASIC_DEPLOYMENT_FEE = SETTINGS["basic_deployment"]
 # ==========================================
 if "deployment" not in st.session_state:
     st.session_state.deployment = SETTINGS["default_deployment"]
+if "offer_on" not in st.session_state or not OFFER["active"]:
+    st.session_state.offer_on = False
 if "basket" not in st.session_state:
     st.session_state.basket = {}
 if "num_licences" not in st.session_state:
@@ -933,9 +1053,19 @@ def total_hardware_capex():
     return sum(item["line_total"] for item in basket_items())
 
 
+def licence_unit():
+    """Customer licence price for this deal (after the partner offer, if applied)."""
+    return disc(LICENCE_MONTHLY_RATE, lic_disc())
+
+
+def licence_cost_unit():
+    """What Novalink charges the reseller per licence for this deal."""
+    return disc(FLOOR_LICENCE_MONTHLY, lic_disc())
+
+
 def total_monthly_licences():
     users = st.session_state.get("num_licences", 0)
-    return float(users) * LICENCE_MONTHLY_RATE if users > 0 else 0.0
+    return float(users) * licence_unit() if users > 0 else 0.0
 
 
 def total_setup_fee(users=None):
@@ -943,8 +1073,8 @@ def total_setup_fee(users=None):
     return float(users) * SETUP_FEE_PER_USER if users > 0 else 0.0
 
 
-def deployment_fee(option=None, users=None):
-    """Deployment only applies when there are users on the system."""
+def deployment_list_fee(option=None, users=None):
+    """Customer deployment price BEFORE any partner offer."""
     users = st.session_state.get("num_licences", 0) if users is None else users
     option = option or st.session_state.get("deployment", DEPLOY_BASIC)
     if users <= 0:
@@ -954,31 +1084,35 @@ def deployment_fee(option=None, users=None):
     return BASIC_DEPLOYMENT_FEE
 
 
+def deployment_fee(option=None, users=None):
+    """Customer deployment price for this deal (after the partner offer, if applied)."""
+    return disc(deployment_list_fee(option, users), dep_disc())
+
+
+def customer_savings():
+    """What the partner offer saves the customer on this deal (ex VAT)."""
+    users = st.session_state.get("num_licences", 0)
+    if not offer_on() or users <= 0:
+        return {"monthly": 0.0, "contract_monthly": 0.0, "deployment": 0.0, "contract_total": 0.0}
+    monthly = (LICENCE_MONTHLY_RATE - licence_unit()) * users
+    dep = deployment_list_fee() - deployment_fee()
+    return {"monthly": monthly, "contract_monthly": monthly * CONTRACT_MONTHS, "deployment": dep,
+            "contract_total": monthly * CONTRACT_MONTHS + dep}
+
+
 def total_one_off():
     return total_setup_fee() + deployment_fee() + total_hardware_capex()
-
-
-def reseller_margin(users, option):
-    """Refyn-IT's margin over the Novalink floors (admin eyes only)."""
-    if users <= 0:
-        return {"monthly": 0.0, "one_off": 0.0}
-    monthly = (LICENCE_MONTHLY_RATE - FLOOR_LICENCE_MONTHLY) * users
-    one_off = (SETUP_FEE_PER_USER - FLOOR_SETUP_PER_USER) * users
-    if option == DEPLOY_BASIC:
-        one_off += BASIC_DEPLOYMENT_FEE - FLOOR_BASIC_DEPLOYMENT
-    return {"monthly": monthly, "one_off": one_off}
 
 
 CONTRACT_MONTHS = 36
 
 
 def novalink_deployment_cost(option, users):
-    """What Novalink charges the reseller for deployment (floor / locked tariff)."""
+    """What Novalink charges the reseller for deployment (floor / locked tariff, less any offer)."""
     if users <= 0:
         return 0.0
-    if option == DEPLOY_ADVANCED:
-        return advanced_deployment_price(users)
-    return FLOOR_BASIC_DEPLOYMENT
+    base = advanced_deployment_price(users) if option == DEPLOY_ADVANCED else FLOOR_BASIC_DEPLOYMENT
+    return disc(base, dep_disc())
 
 
 def cost_sell_lines(users, option, hw_items):
@@ -988,14 +1122,17 @@ def cost_sell_lines(users, option, hw_items):
     if users > 0:
         lines.append({"kind": "monthly", "name": "Hosted VoIP cloud user licence",
                       "desc": "Per user, per month",
-                      "qty": users, "cost_unit": FLOOR_LICENCE_MONTHLY, "sell_unit": LICENCE_MONTHLY_RATE})
+                      "qty": users, "cost_unit": licence_cost_unit(), "sell_unit": licence_unit(),
+                      "list_cost": FLOOR_LICENCE_MONTHLY, "offer_pct": OFFER["licence_pct"] if offer_on() else 0})
         lines.append({"kind": "one_off", "name": "User setup & provisioning",
                       "desc": "Per user, one-off",
                       "qty": users, "cost_unit": FLOOR_SETUP_PER_USER, "sell_unit": SETUP_FEE_PER_USER})
         lines.append({"kind": "one_off", "name": DEPLOYMENT_LABELS[option],
                       "desc": DEPLOYMENT_DESCS[option],
                       "qty": 1, "cost_unit": novalink_deployment_cost(option, users),
-                      "sell_unit": deployment_fee(option, users)})
+                      "sell_unit": deployment_fee(option, users),
+                      "list_cost": (advanced_deployment_price(users) if option == DEPLOY_ADVANCED else FLOOR_BASIC_DEPLOYMENT),
+                      "offer_pct": OFFER["deployment_pct"] if offer_on() else 0})
     for itm in hw_items:
         lines.append({"kind": "one_off", "name": itm["name"], "desc": itm.get("desc", ""),
                       "qty": itm["qty"], "cost_unit": itm["price"], "sell_unit": itm["price"]})
@@ -1085,10 +1222,12 @@ def generate_partner_order_pdf(order_meta, partner, end_customer, lines):
         sel = [ln for ln in lines if ln["kind"] == kind]
         suffix = " / mo" if per_month else ""
         for ln in sel:
+            offer_note = (f"<br/><font color='#0F5A73' size=7><b>{pct_txt(ln['offer_pct'])} partner offer</b> "
+                          f"(list £{ln['list_cost']:,.2f})</font>" if ln.get("offer_pct") else "")
             rows.append([
                 Paragraph(f"<b>{esc(ln['name'])}</b><br/><font color='#64748B' size=7>{esc(ln['desc'])}</font>", td_style),
                 Paragraph(str(ln["qty"]), td_style),
-                Paragraph(f"£{ln['cost_unit']:,.2f}{suffix}", td_style),
+                Paragraph(f"£{ln['cost_unit']:,.2f}{suffix}{offer_note}", td_style),
                 Paragraph(f"£{ln['cost_total']:,.2f}{suffix}", td_bold),
             ])
         total = sum(ln["cost_total"] for ln in sel)
@@ -1122,6 +1261,12 @@ def generate_partner_order_pdf(order_meta, partner, end_customer, lines):
                               ("LEFTPADDING", (0, 0), (-1, -1), 10), ("VALIGN", (0, 0), (-1, -1), "MIDDLE")]))
     story += [summ, Spacer(1, 10)]
 
+    if any(ln.get("offer_pct") for ln in lines):
+        story.append(Paragraph(
+            f"<b>{esc(OFFER['name'])} applied:</b> partner prices for user licences and deployment include the "
+            f"Novalink partner offer, fixed for the {CONTRACT_MONTHS}-month term of this order. "
+            "Setup fees and hardware are at standard partner prices.", note_style))
+        story.append(Spacer(1, 6))
     story.append(Paragraph(
         "<b>Partner terms:</b> Prices shown are Novalink partner (wholesale) prices and are payable by the partner "
         f"regardless of the price agreed with the end customer. Licences are subject to a {CONTRACT_MONTHS}-month minimum term. "
@@ -1260,10 +1405,38 @@ def generate_quotation_pdf(quote_meta, reseller, customer, num_users, hw_items, 
     story.append(t_party)
     story.append(Spacer(1, 10))
 
+    # Partner offer banner (only when applied to this deal)
+    if offer_on() and num_users > 0:
+        sv = customer_savings()
+        parts = []
+        if OFFER["licence_pct"]:
+            parts.append(f"{pct_txt(OFFER['licence_pct'])} off user licences")
+        if OFFER["deployment_pct"]:
+            parts.append(f"{pct_txt(OFFER['deployment_pct'])} off deployment")
+        offer_p = Paragraph(
+            f"<font size=11><b>{esc(OFFER['name']).upper()} APPLIED</b></font> &nbsp;·&nbsp; {' &amp; '.join(parts)}<br/>"
+            f"You save <b>£{sv['monthly']:,.2f} per month</b> on licences"
+            + (f" and <b>£{sv['deployment']:,.2f}</b> on deployment" if sv["deployment"] else "")
+            + f" — <b>£{sv['contract_total']:,.2f} over the {CONTRACT_MONTHS}-month term</b> (ex VAT). "
+            f"Offer pricing is fixed for the full {CONTRACT_MONTHS}-month minimum term.",
+            ParagraphStyle("Offer", parent=styles["Normal"], fontName="Helvetica", fontSize=8.5, leading=12.5,
+                           textColor=colors.white))
+        t_offer = Table([[offer_p]], colWidths=[540])
+        t_offer.setStyle(TableStyle([
+            ("BACKGROUND", (0, 0), (-1, -1), c_primary),
+            ("TOPPADDING", (0, 0), (-1, -1), 8), ("BOTTOMPADDING", (0, 0), (-1, -1), 8),
+            ("LEFTPADDING", (0, 0), (-1, -1), 10), ("RIGHTPADDING", (0, 0), (-1, -1), 10),
+        ]))
+        story.append(t_offer)
+        story.append(Spacer(1, 10))
+
     # 1. Ongoing Monthly Costs Table
     story.append(Paragraph("1. Ongoing Monthly Costs", sec_head))
     story.append(Spacer(1, 4))
-    mrc_total = num_users * LICENCE_MONTHLY_RATE if num_users > 0 else 0.0
+    lic_unit = licence_unit()
+    mrc_total = num_users * lic_unit if num_users > 0 else 0.0
+    was = (lambda full, now: f"<br/><font color='#94A3B8' size=7><strike>£{full:,.2f}</strike> "
+           f"{esc(OFFER['name'])}</font>" if offer_on() and now < full else "")
     mrc_vat = mrc_total * VAT_RATE
     mrc_inc_vat = mrc_total + mrc_vat
 
@@ -1277,7 +1450,7 @@ def generate_quotation_pdf(quote_meta, reseller, customer, num_users, hw_items, 
                 td_style,
             ),
             Paragraph(str(num_users), td_style),
-            Paragraph(f"£{LICENCE_MONTHLY_RATE:,.2f} / mo", td_style),
+            Paragraph(f"£{lic_unit:,.2f} / mo{was(LICENCE_MONTHLY_RATE, lic_unit)}", td_style),
             Paragraph(f"£{mrc_total:,.2f} / mo", td_bold),
         ],
         [Paragraph("<b>Total Ongoing Monthly Costs (Ex VAT)</b>", td_bold), "", "", Paragraph(f"<b>£{mrc_total:,.2f} / mo</b>", td_bold)],
@@ -1330,7 +1503,7 @@ def generate_quotation_pdf(quote_meta, reseller, customer, num_users, hw_items, 
                 td_style,
             ),
             Paragraph("1", td_style),
-            Paragraph(f"£{deploy_total:,.2f}", td_style),
+            Paragraph(f"£{deploy_total:,.2f}{was(deployment_list_fee(deployment_option, num_users), deploy_total)}", td_style),
             Paragraph(f"£{deploy_total:,.2f}", td_bold),
         ])
     for itm in hw_items:
@@ -1439,8 +1612,22 @@ CATEGORIES = ["All hardware", "Yealink Phones", "Fanvil Phones", "Cordless DECT"
 
 def quote_signature():
     return (st.session_state.get("num_licences", 0), st.session_state.get("deployment"),
-            LICENCE_MONTHLY_RATE, SETUP_FEE_PER_USER, BASIC_DEPLOYMENT_FEE,
+            LICENCE_MONTHLY_RATE, SETUP_FEE_PER_USER, BASIC_DEPLOYMENT_FEE, offer_on(),
             tuple(sorted(st.session_state.basket.items())))
+
+
+def was_html(full, now):
+    """Struck-through list price shown next to an offer price."""
+    return f'<s class="rit-was">{money(full)}</s>' if offer_on() and now < full - 0.001 else ""
+
+
+def offer_parts_txt():
+    parts = []
+    if OFFER["licence_pct"]:
+        parts.append(f"{pct_txt(OFFER['licence_pct'])} off user licences")
+    if OFFER["deployment_pct"]:
+        parts.append(f"{pct_txt(OFFER['deployment_pct'])} off deployment")
+    return " & ".join(parts)
 
 
 def product_image_html(product, max_h=124):
@@ -1467,6 +1654,33 @@ with tab_builder:
     left, right = st.columns([1.72, 1], gap="large")
 
     with left:
+        # ===== Partner offer pop-out =====
+        if OFFER["active"]:
+            with st.container(key=f"card-offer-{'on' if offer_on() else 'off'}"):
+                o1, o2 = st.columns([3.2, 1], gap="medium")
+                with o1:
+                    ends = f" · until {esc(OFFER['ends'])}" if OFFER["ends"] else ""
+                    render_html(
+                        f'<div class="rit-offer-k">{icon("zap", 13)}{esc(OFFER["name"])}{ends}</div>'
+                        f'<div class="rit-offer-t">{esc(offer_parts_txt())}</div>'
+                        '<div class="rit-offer-s">Apply it to this quote to pass the saving on to your customer. '
+                        'Your cost from Novalink drops by the same %, on licences and deployment only.</div>'
+                    )
+                with o2:
+                    st.toggle("Apply offer", key="offer_on", help="Switch on to give this customer the offer price")
+                if offer_on():
+                    sv = customer_savings()
+                    if sv["contract_total"] > 0:
+                        render_html(
+                            '<div class="rit-offer-save">'
+                            f'<div><b>{money(sv["monthly"])}</b><span>saved / month</span></div>'
+                            f'<div><b>{money(sv["deployment"])}</b><span>saved on deployment</span></div>'
+                            f'<div><b>{money(sv["contract_total"])}</b><span>saved over {CONTRACT_MONTHS} months</span></div>'
+                            '</div>'
+                        )
+                    else:
+                        render_html('<div class="rit-offer-s" style="margin-top:8px">Add users to see the customer saving.</div>')
+
         # ===== 01 · Users =====
         with st.container(key="card-users"):
             section_header("01", "Hosted user licences", "Ongoing monthly · 36-month minimum term")
@@ -1480,7 +1694,7 @@ with tab_builder:
                     '<div class="nl-licence"><div class="top"><div>'
                     '<div class="name">Hosted Cloud User Licence</div>'
                     '<div class="sub">A complete unified-communications seat, enterprise features included.</div></div>'
-                    f'<div class="nl-price">{money(LICENCE_MONTHLY_RATE)} <small>/ user / mo</small></div></div>'
+                    f'<div class="nl-price">{was_html(LICENCE_MONTHLY_RATE, licence_unit())}{money(licence_unit())} <small>/ user / mo</small></div></div>'
                     f'<div class="nl-feats">{feats}</div>'
                     f'<div class="nl-activation">{icon("zap", 14)}<span>One-off user setup &amp; provisioning:'
                     f' <b>{money(SETUP_FEE_PER_USER)} per user</b>, billed in month 1</span></div></div>'
@@ -1488,7 +1702,7 @@ with tab_builder:
             with u2:
                 st.number_input("Number of users", min_value=0, max_value=500, step=1, key="num_licences")
                 users = st.session_state.num_licences
-                mrc = float(users) * LICENCE_MONTHLY_RATE
+                mrc = float(users) * licence_unit()
                 setup = total_setup_fee(users)
                 render_html(
                     '<div class="nl-mini">'
@@ -1510,10 +1724,10 @@ with tab_builder:
                 with col:
                     with st.container(key=f"dep-{'on' if selected else 'off'}-{opt}"):
                         if opt == DEPLOY_BASIC:
-                            price_txt = money(basic_price)
+                            price_txt = was_html(basic_price, disc(basic_price, dep_disc())) + money(disc(basic_price, dep_disc()))
                             meta = [chip("Flat fee", "muted"), chip("Self-install", "muted")]
                         else:
-                            price_txt = money(adv_price)
+                            price_txt = was_html(adv_price, disc(adv_price, dep_disc())) + money(disc(adv_price, dep_disc()))
                             meta = [chip(advanced_band_label(max(users, 1)), "accent"), chip("Fully managed", "muted")]
                         render_html(
                             f'<div class="rit-dep-top"><div class="rit-dep-name">{esc(DEPLOYMENT_LABELS[opt])}</div>'
@@ -1628,14 +1842,15 @@ with tab_builder:
                     hw_summary = ("; ".join(f"{i['name']} x{i['qty']}" for i in current_h_items)
                                   if current_h_items else "No Hardware (App/Licences Only)")
                     one_off_combined = total_one_off()
-                    margin = reseller_margin(st.session_state.num_licences, dep_opt)
                     _ps = profit_summary(cost_sell_lines(st.session_state.num_licences, dep_opt, current_h_items))
                     record = {
                         "Quote Ref": [quote_ref], "Date": [quote_date], "Brand": [APP_NAME],
                         "Reseller": [r_company], "Account Manager": [r_contact],
                         "Customer Company": [c_company], "Customer Contact": [c_contact],
                         "Customer Email": [c_email], "Licences": [st.session_state.num_licences],
-                        "Licence Rate (£)": [f"{LICENCE_MONTHLY_RATE:.2f}"],
+                        "Licence Rate (£)": [f"{licence_unit():.2f}"],
+                        "Partner Offer": [OFFER["name"] if offer_on() else "No"],
+                        "Customer Saving 36m (£)": [f"{customer_savings()['contract_total']:.2f}"],
                         "Ongoing Monthly Costs Ex VAT (£)": [f"{total_monthly_licences():.2f}"],
                         "Ongoing Monthly Costs Inc VAT (£)": [f"{total_monthly_licences() * (1 + VAT_RATE):.2f}"],
                         "User Setup Ex VAT (£)": [f"{total_setup_fee():.2f}"],
@@ -1644,8 +1859,8 @@ with tab_builder:
                         "Hardware Total Ex VAT (£)": [f"{total_hardware_capex():.2f}"],
                         "Total One-Off Costs Ex VAT (£)": [f"{one_off_combined:.2f}"],
                         "Total One-Off Costs Inc VAT (£)": [f"{one_off_combined * (1 + VAT_RATE):.2f}"],
-                        "Reseller Margin Monthly (£)": [f"{margin['monthly']:.2f}"],
-                        "Reseller Margin One-Off (£)": [f"{margin['one_off']:.2f}"],
+                        "Reseller Margin Monthly (£)": [f"{_ps['monthly_profit']:.2f}"],
+                        "Reseller Margin One-Off (£)": [f"{_ps['oneoff_profit']:.2f}"],
                         "Novalink Monthly Cost (£)": [f"{_ps['monthly_cost']:.2f}"],
                         "Novalink One-Off Cost (£)": [f"{_ps['oneoff_cost']:.2f}"],
                         "Contract Profit 36m (£)": [f"{_ps['contract_total_profit']:.2f}"],
@@ -1699,6 +1914,11 @@ with tab_builder:
                     f'<div class="nl-line"><span class="n">{esc(DEPLOYMENT_LABELS[st.session_state.deployment])}</span>'
                     f'<span class="p">{money(deployment_fee())}</span></div>'
                 )
+                if offer_on():
+                    render_html(
+                        f'<div class="nl-line rit-save-line"><span class="n">{icon("zap", 12)} {esc(OFFER["name"])} saving</span>'
+                        f'<span class="p">−{money(customer_savings()["contract_total"])} <small>/ {CONTRACT_MONTHS}m</small></span></div>'
+                    )
             for item in items:
                 with st.container(key=f"sumline-{item['id']}"):
                     try:
@@ -1745,6 +1965,21 @@ with tab_customer_view:
     items = basket_items()
     for_whom = st.session_state.get("active_quote_customer")
 
+    cv_offer_html = ""
+    if offer_on() and users > 0:
+        sv = customer_savings()
+        cv_offer_html = (
+            '<div class="rit-cv-offer"><div class="burst">'
+            f'<div class="pct">{pct_txt(max(OFFER["licence_pct"], OFFER["deployment_pct"]))}</div><div class="off">OFF</div></div>'
+            f'<div class="body"><div class="k">{esc(OFFER["name"])} applied</div>'
+            f'<div class="t">{esc(offer_parts_txt())}</div>'
+            f'<div class="s">You save <b>{money(sv["monthly"])} every month</b>'
+            + (f' plus <b>{money(sv["deployment"])}</b> on deployment' if sv["deployment"] else "")
+            + f'. Offer pricing is fixed for the full {CONTRACT_MONTHS}-month term.</div></div>'
+            f'<div class="total"><div class="l">Total saving</div><div class="v">{money(sv["contract_total"])}</div>'
+            f'<div class="i">over {CONTRACT_MONTHS} months, ex VAT</div></div></div>'
+        )
+
     _, mid, _ = st.columns([0.06, 1, 0.06])
     with mid:
         with st.container(key="card-cv-head"):
@@ -1755,7 +1990,8 @@ with tab_customer_view:
                 '<div class="t">Your cloud <span>telephony solution</span></div>'
                 '<div class="s">Unified communications for every user, on desk, laptop and mobile.</div></div>'
                 f'<div>{chip(datetime.now().strftime("%d %B %Y"), "accent")}</div></div>'
-                '<div class="nl-kpis">'
+                + cv_offer_html
+                + '<div class="nl-kpis">'
                 f'<div class="nl-kpi" style="--c:#EA5624"><div class="l">Ongoing monthly</div><div class="v">{money(mrc_ex)} <small>ex VAT</small></div><div class="i">{money(mrc_ex + mrc_vat)} / mo inc VAT</div></div>'
                 f'<div class="nl-kpi" style="--c:#D4D9DF"><div class="l">One-off upfront</div><div class="v">{money(one_off_ex)} <small>ex VAT</small></div><div class="i">{money(one_off_ex + one_off_vat)} inc VAT</div></div>'
                 f'<div class="nl-kpi" style="--c:#34D399"><div class="l">Month 1 investment</div><div class="v">{money(month1_ex)} <small>ex VAT</small></div><div class="i">{money(month1_ex * (1 + VAT_RATE))} inc VAT</div></div>'
@@ -1770,7 +2006,7 @@ with tab_customer_view:
                     '<th class="num">Unit (ex VAT)</th><th class="num">Monthly (ex VAT)</th></tr></thead><tbody>'
                     '<tr><td><b>Hosted VoIP cloud user licence</b><div class="desc">Apps, softphone, call recording,'
                     ' auto-attendant &amp; inclusive UK calls</div></td>'
-                    f'<td class="num">{users}</td><td class="num">{money(LICENCE_MONTHLY_RATE)}</td><td class="num"><b>{money(mrc_ex)}</b></td></tr>'
+                    f'<td class="num">{users}</td><td class="num">{was_html(LICENCE_MONTHLY_RATE, licence_unit())}{money(licence_unit())}</td><td class="num"><b>{money(mrc_ex)}</b></td></tr>'
                     f'<tr class="sub"><td colspan="3">Subtotal (ex VAT)</td><td class="num">{money(mrc_ex)}</td></tr>'
                     f'<tr class="sub"><td colspan="3">VAT @ 20%</td><td class="num">{money(mrc_vat)}</td></tr>'
                     f'<tr class="grand"><td colspan="3">Total monthly (inc VAT)</td><td class="num">{money(mrc_ex + mrc_vat)} / mo</td></tr>'
@@ -1791,7 +2027,7 @@ with tab_customer_view:
                     '<tr><td><div style="display:flex;gap:12px;align-items:center"><div class="thumb">'
                     f'<span style="color:#EA5624">{icon("truck", 18)}</span></div><div><b>{esc(DEPLOYMENT_LABELS[dep_opt])}</b>'
                     f'<div class="desc">{esc(DEPLOYMENT_DESCS[dep_opt])}</div></div></div></td>'
-                    f'<td class="num">1</td><td class="num">{money(dep_ex)}</td><td class="num"><b>{money(dep_ex)}</b></td></tr>'
+                    f'<td class="num">1</td><td class="num">{was_html(deployment_list_fee(), dep_ex)}{money(dep_ex)}</td><td class="num"><b>{money(dep_ex)}</b></td></tr>'
                 )
             for item in items:
                 uri = get_base64_image(item.get("image"))
@@ -1871,7 +2107,8 @@ with tab_admin:
                         who = details["customer"]["company"] if details else "the current quote"
                         render_html(
                             f'<div class="rit-deal">{chip("Deal", "muted")}<b>{esc(who)}</b>'
-                            f'<span>{a_users} users · {esc(DEPLOYMENT_LABELS[a_dep])}</span></div>'
+                            f'<span>{a_users} users · {esc(DEPLOYMENT_LABELS[a_dep])}</span>'
+                            + (chip(f"{OFFER['name']} applied", "accent") if offer_on() else "") + '</div>'
                             '<div class="rit-pkpis">'
                             f'<div class="nl-kpi" style="--c:#EA5624"><div class="l">Monthly profit</div><div class="v">{money(ps["monthly_profit"])}</div>'
                             f'<div class="i">{money(ps["monthly_sell"])} billed − {money(ps["monthly_cost"])} to {POWERED_BY}</div></div>'
@@ -1974,6 +2211,8 @@ with tab_admin:
                     render_html(
                         '<div class="pe-chips" style="margin-bottom:14px">'
                         + chip(f"Storage: {storage}", "good" if _gh_config() else "warn")
+                        + (chip(f"{OFFER['name']}: {offer_parts_txt()}" + (f" until {OFFER['ends']}" if OFFER["ends"] else "")
+                                + " · set by Novalink", "accent") if OFFER["active"] else "")
                         + (chip(f"Last saved {SETTINGS['updated']}", "muted") if SETTINGS["updated"] else "")
                         + "</div>"
                     )
