@@ -18,6 +18,73 @@ from reportlab.lib.utils import ImageReader
 from reportlab.platypus import HRFlowable, Image as RLImage, PageBreak, Paragraph, SimpleDocTemplate, Spacer, Table, TableStyle
 import streamlit as st
 
+# #####################################################################
+# #####################################################################
+#
+#   NOVALINK PRICE BOOK  -  YOUR WHOLESALE PRICES LIVE HERE
+#
+#   To change a price: edit the number, save, commit to GitHub.
+#   The app updates itself within a minute or so. Every screen, the
+#   customer quote PDF, the Novalink partner order and the profit
+#   page all read from these values - nothing else needs touching.
+#
+#   Rules:  - numbers only, no £ sign or commas   (e.g. 9.50  not £9.50)
+#           - keep the full stop for pence          (e.g. 4.00)
+#           - don't delete the commas at the ends of lines inside [ ] or { }
+#
+#   Existing PDFs already sent out are NOT changed - only new quotes.
+#   If a floor goes UP above a reseller's saved sell price, their sell
+#   price is automatically lifted to the new floor.
+#
+# #####################################################################
+
+# ---- Hosted user licences ------------------------------------------
+LICENCE_COST_PER_USER_MONTH = 9.00     # what the reseller pays you, per user per month (their minimum sell price)
+
+# ---- One-off charges -----------------------------------------------
+SETUP_COST_PER_USER = 4.00             # user setup & provisioning, per user (their minimum sell price)
+BASIC_BUILD_COST = 75.00               # "Basic system build" - flat fee (their minimum sell price)
+
+# ---- Advanced system deployment (fixed - resellers can't change it) --
+ADVANCED_DEPLOYMENT_TIERS = [
+    # (up to this many users, price)
+    (5, 250.00),                        # 1-5 users
+    (10, 500.00),                       # 6-10 users
+]
+ADVANCED_PRICE_PER_EXTRA_BAND = 750.00  # above the last tier: this price per band...
+ADVANCED_EXTRA_BAND_SIZE = 10           # ...of this many users (11-20 = £750, 21-30 = £1,500 ...)
+
+# ---- Hardware (price per unit) -------------------------------------
+# These override any other hardware price in the app. A product not
+# listed here keeps its existing price.
+HARDWARE_PRICES = {
+    "v67": 189.00,        # Fanvil Executive V67
+    "v66pro": 129.00,     # Fanvil Premium V66 Pro
+    "v62pro": 89.00,      # Fanvil Essential V62 Pro
+    "w620w": 149.00,      # Linkvil Rugged W620W
+    "t73w": 78.00,        # Yealink T73W
+    "t74w": 111.00,       # Yealink T74W
+    "t85w": 115.00,       # Yealink T85W
+    "t87w": 155.00,       # Yealink T87W
+    "t88w_pro": 225.00,   # Yealink T88W Pro
+    "w74p": 87.00,        # Yealink W74P
+    "ax83h": 75.00,       # Yealink AX83H
+    "ax86r": 113.00,      # Yealink AX86R
+    "uh36_mono": 42.00,   # Yealink UH36 Mono Headset UC
+    "psu_10w": 11.00,     # Yealink 10W PSU
+}
+
+# ---- Terms ---------------------------------------------------------
+VAT_RATE = 0.20                         # 0.20 = 20%
+CONTRACT_MONTHS = 36                    # minimum term shown on every quote & used for profit maths
+QUOTE_VALID_DAYS = 30                   # "Quotation valid for ... days"
+
+# #####################################################################
+#   END OF PRICE BOOK - you shouldn't need to edit anything below here
+# #####################################################################
+VAT_PCT = f"{VAT_RATE * 100:g}%"
+
+
 # ==========================================
 # 1. PAGE CONFIGURATION & BRAND
 # ==========================================
@@ -698,7 +765,6 @@ def get_base64_image(image_path):
 # ==========================================
 # 5. HARDWARE & ACCESSORIES CATALOGUE
 # ==========================================
-VAT_RATE = 0.20
 CATALOGUE_FILE = asset("catalogue.json")
 
 _FALLBACK_PRODUCTS = [
@@ -737,6 +803,16 @@ _FALLBACK_PRODUCTS = [
 ]
 
 
+def _apply_price_book(products):
+    out = []
+    for p in products:
+        p = dict(p)
+        if p.get("id") in HARDWARE_PRICES:
+            p["price"] = float(HARDWARE_PRICES[p["id"]])
+        out.append(p)
+    return out
+
+
 @st.cache_data(ttl=60)
 def load_products():
     if os.path.isfile(CATALOGUE_FILE):
@@ -751,10 +827,10 @@ def load_products():
                         if match:
                             p["tag"] = match["tag"]
                             p["category"] = match.get("category", "Hardware")
-                return products
+                return _apply_price_book(products)
         except (json.JSONDecodeError, OSError):
             pass
-    return _FALLBACK_PRODUCTS
+    return _apply_price_book(_FALLBACK_PRODUCTS)
 
 
 PRODUCTS = load_products()
@@ -764,9 +840,9 @@ PRODUCTS = load_products()
 # ==========================================
 # Floors are Novalink's price to the reseller. The admin panel can only raise
 # these, never go below them - enforced here, whatever the saved file says.
-FLOOR_LICENCE_MONTHLY = 9.00      # per user / month
-FLOOR_SETUP_PER_USER = 4.00       # per user, one-off
-FLOOR_BASIC_DEPLOYMENT = 75.00    # flat, one-off
+FLOOR_LICENCE_MONTHLY = float(LICENCE_COST_PER_USER_MONTH)   # set in the PRICE BOOK at the top
+FLOOR_SETUP_PER_USER = float(SETUP_COST_PER_USER)
+FLOOR_BASIC_DEPLOYMENT = float(BASIC_BUILD_COST)
 
 DEPLOY_BASIC = "basic"
 DEPLOY_ADVANCED = "advanced"
@@ -796,16 +872,15 @@ DEFAULT_SETTINGS = {
 
 def advanced_deployment_price(users: int) -> float:
     """Locked Novalink tariff (not editable by the reseller).
-    1-5 users £250 · 6-10 users £500 · then £750 per band of 10:
-    11-20 £750, 21-30 £1,500, 31-40 £2,250 ..."""
+    Tiers and band pricing are set in the PRICE BOOK at the top of this file."""
     users = int(users or 0)
     if users <= 0:
         return 0.0
-    if users <= 5:
-        return 250.0
-    if users <= 10:
-        return 500.0
-    return 750.0 * math.ceil((users - 10) / 10)
+    for cap, price in ADVANCED_DEPLOYMENT_TIERS:
+        if users <= cap:
+            return float(price)
+    last_cap = ADVANCED_DEPLOYMENT_TIERS[-1][0]
+    return float(ADVANCED_PRICE_PER_EXTRA_BAND) * math.ceil((users - last_cap) / ADVANCED_EXTRA_BAND_SIZE)
 
 
 def sanitise_settings(raw: dict) -> dict:
@@ -989,7 +1064,6 @@ def reseller_margin(users, option):
     return {"monthly": monthly, "one_off": one_off}
 
 
-CONTRACT_MONTHS = 36
 
 
 def novalink_deployment_cost(option, users):
@@ -1114,7 +1188,7 @@ def generate_partner_order_pdf(order_meta, partner, end_customer, lines, build_s
         total = sum(ln["cost_total"] for ln in sel)
         rows += [
             [Paragraph("<b>Total (Ex VAT)</b>", td_bold), "", "", Paragraph(f"<b>£{total:,.2f}{suffix}</b>", td_bold)],
-            [Paragraph("VAT @ 20%", td_style), "", "", Paragraph(f"£{total * VAT_RATE:,.2f}{suffix}", td_style)],
+            [Paragraph(f"VAT @ {VAT_PCT}", td_style), "", "", Paragraph(f"£{total * VAT_RATE:,.2f}{suffix}", td_style)],
             [Paragraph("<b>Total (Inc VAT)</b>", td_bold), "", "", Paragraph(f"<b>£{total * (1 + VAT_RATE):,.2f}{suffix}</b>", td_bold)],
         ]
         t = Table(rows, colWidths=[290, 50, 100, 100])
@@ -1236,8 +1310,8 @@ def generate_quotation_pdf(quote_meta, reseller, customer, num_users, hw_items, 
             Paragraph(
                 f"<b>Reference:</b> {quote_meta['ref']}<br/>"
                 f"<b>Date:</b> {quote_meta['date']}<br/>"
-                f"<b>Contract Term:</b> <b>36 Months Minimum</b><br/>"
-                f"<b>Valid for:</b> 30 days",
+                f"<b>Contract Term:</b> <b>{CONTRACT_MONTHS} Months Minimum</b><br/>"
+                f"<b>Valid for:</b> {QUOTE_VALID_DAYS} days",
                 meta_style,
             ),
         ]],
@@ -1308,7 +1382,7 @@ def generate_quotation_pdf(quote_meta, reseller, customer, num_users, hw_items, 
             Paragraph(f"£{mrc_total:,.2f} / mo", td_bold),
         ],
         [Paragraph("<b>Total Ongoing Monthly Costs (Ex VAT)</b>", td_bold), "", "", Paragraph(f"<b>£{mrc_total:,.2f} / mo</b>", td_bold)],
-        [Paragraph("VAT @ 20%", td_style), "", "", Paragraph(f"£{mrc_vat:,.2f} / mo", td_style)],
+        [Paragraph(f"VAT @ {VAT_PCT}", td_style), "", "", Paragraph(f"£{mrc_vat:,.2f} / mo", td_style)],
         [Paragraph("<b>Total Ongoing Monthly Costs (Inc VAT)</b>", td_bold), "", "", Paragraph(f"<b>£{mrc_inc_vat:,.2f} / mo</b>", td_bold)],
     ]
     t_mrc = Table(mrc_data, colWidths=[290, 50, 100, 100])
@@ -1368,7 +1442,7 @@ def generate_quotation_pdf(quote_meta, reseller, customer, num_users, hw_items, 
             Paragraph(f"£{itm['line_total']:,.2f}", td_bold),
         ])
     upfront_data.append([Paragraph("<b>Total One-Off Upfront Costs (Ex VAT)</b>", td_bold), "", "", Paragraph(f"<b>£{one_off_grand_total:,.2f}</b>", td_bold)])
-    upfront_data.append([Paragraph("VAT @ 20%", td_style), "", "", Paragraph(f"£{one_off_vat:,.2f}", td_style)])
+    upfront_data.append([Paragraph(f"VAT @ {VAT_PCT}", td_style), "", "", Paragraph(f"£{one_off_vat:,.2f}", td_style)])
     upfront_data.append([Paragraph("<b>Total One-Off Upfront Costs (Inc VAT)</b>", td_bold), "", "", Paragraph(f"<b>£{one_off_inc_vat:,.2f}</b>", td_bold)])
 
     t_upfront = Table(upfront_data, colWidths=[290, 50, 100, 100])
@@ -1410,11 +1484,11 @@ def generate_quotation_pdf(quote_meta, reseller, customer, num_users, hw_items, 
     # Contract Termination Clause Box
     clause_text = (
         "<b>IMPORTANT CONTRACTUAL COMMITMENT &amp; TERMINATION TERMS:</b><br/>"
-        "All hosted user licences quoted herein are strictly subject to a <b>minimum 36-month agreement term</b>. "
-        "In the event of early termination or cancellation of services prior to the expiry of the initial 36-month term, "
+        f"All hosted user licences quoted herein are strictly subject to a <b>minimum {CONTRACT_MONTHS}-month agreement term</b>. "
+        f"In the event of early termination or cancellation of services prior to the expiry of the initial {CONTRACT_MONTHS}-month term, "
         "<b>early termination charges will be applicable and payable in full</b> for all outstanding monthly licence fees "
         "remaining across the unexpired portion of the agreement.<br/>"
-        "<b>Commercial Notes:</b> Quotation valid for 30 calendar days."
+        f"<b>Commercial Notes:</b> Quotation valid for {QUOTE_VALID_DAYS} calendar days."
     )
     clause_para = Paragraph(clause_text, ParagraphStyle(
         "ContractClause", parent=styles["Normal"], fontName="Helvetica", fontSize=7.8, leading=11, textColor=c_warning_text))
@@ -1931,12 +2005,26 @@ def product_image_html(product, max_h=124):
 
 
 def advanced_band_label(users: int) -> str:
-    if users <= 5:
-        return "1–5 users"
-    if users <= 10:
-        return "6–10 users"
-    top = 10 + 10 * math.ceil((users - 10) / 10)
-    return f"{top - 9}–{top} users"
+    prev = 0
+    for cap, _ in ADVANCED_DEPLOYMENT_TIERS:
+        if users <= cap:
+            return f"{prev + 1}–{cap} users"
+        prev = cap
+    band = ADVANCED_EXTRA_BAND_SIZE
+    top = prev + band * math.ceil((users - prev) / band)
+    return f"{top - band + 1}–{top} users"
+
+
+def advanced_bands(extra=4):
+    """(from, to) user bands for the tariff table: the fixed tiers + a few extra bands."""
+    out, prev = [], 0
+    for cap, _ in ADVANCED_DEPLOYMENT_TIERS:
+        out.append((prev + 1, cap))
+        prev = cap
+    for _ in range(extra):
+        out.append((prev + 1, prev + ADVANCED_EXTRA_BAND_SIZE))
+        prev += ADVANCED_EXTRA_BAND_SIZE
+    return out
 
 
 hero_slot = st.empty()
@@ -1949,7 +2037,7 @@ with tab_builder:
     with left:
         # ===== 01 · Users =====
         with st.container(key="card-users"):
-            section_header("01", "Hosted user licences", "Ongoing monthly · 36-month minimum term")
+            section_header("01", "Hosted user licences", f"Ongoing monthly · {CONTRACT_MONTHS}-month minimum term")
             u1, u2 = st.columns([1.35, 1], gap="medium")
             with u1:
                 feats = "".join(
@@ -2006,7 +2094,7 @@ with tab_builder:
                                   on_click=lambda o=opt: st.session_state.update(deployment=o), **FULL_WIDTH)
             if users == 0:
                 render_html(f'<div class="pe-hint">{icon("alert", 14)}<span>Deployment is added once you set the number of users.'
-                            ' Advanced pricing shown is for 1–5 users.</span></div>')
+                            f' Advanced pricing shown is for {advanced_band_label(1)}.</span></div>')
             render_build_sheet_form()
 
         # ===== 03 · Hardware =====
@@ -2129,7 +2217,7 @@ with tab_builder:
                         "Reseller Margin One-Off (£)": [f"{margin['one_off']:.2f}"],
                         "Novalink Monthly Cost (£)": [f"{_ps['monthly_cost']:.2f}"],
                         "Novalink One-Off Cost (£)": [f"{_ps['oneoff_cost']:.2f}"],
-                        "Contract Profit 36m (£)": [f"{_ps['contract_total_profit']:.2f}"],
+                        f"Contract Profit {CONTRACT_MONTHS}m (£)": [f"{_ps['contract_total_profit']:.2f}"],
                         "Hardware Summary": [hw_summary], "Delivery Address": [full_delivery],
                     }
                     df = pd.DataFrame(record)
@@ -2195,8 +2283,8 @@ with tab_builder:
                         st.button("✕", key=f"del_{item['id']}", on_click=remove_from_basket, args=(item["id"],),
                                   help=f"Remove {item['name']}")
             render_html(
-                f'<div class="nl-term">{icon("alert", 14)}<span>Licences are on a <b>36-month minimum term</b>.'
-                ' Early termination charges apply. Quote valid for 30 days.</span></div>'
+                f'<div class="nl-term">{icon("alert", 14)}<span>Licences are on a <b>{CONTRACT_MONTHS}-month minimum term</b>.'
+                f' Early termination charges apply. Quote valid for {QUOTE_VALID_DAYS} days.</span></div>'
             )
             if "active_quote_pdf" in st.session_state and st.session_state.get("active_quote_sig") == quote_signature():
                 st.download_button(
@@ -2244,7 +2332,7 @@ with tab_customer_view:
             )
 
         with st.container(key="card-cv-monthly"):
-            section_header("1", "Ongoing monthly costs", "Per user, per month · 36-month minimum term")
+            section_header("1", "Ongoing monthly costs", f"Per user, per month · {CONTRACT_MONTHS}-month minimum term")
             if users > 0:
                 render_html(
                     '<table class="nl-table"><thead><tr><th>Service</th><th class="num">Users</th>'
@@ -2253,7 +2341,7 @@ with tab_customer_view:
                     ' auto-attendant &amp; inclusive UK calls</div></td>'
                     f'<td class="num">{users}</td><td class="num">{money(LICENCE_MONTHLY_RATE)}</td><td class="num"><b>{money(mrc_ex)}</b></td></tr>'
                     f'<tr class="sub"><td colspan="3">Subtotal (ex VAT)</td><td class="num">{money(mrc_ex)}</td></tr>'
-                    f'<tr class="sub"><td colspan="3">VAT @ 20%</td><td class="num">{money(mrc_vat)}</td></tr>'
+                    f'<tr class="sub"><td colspan="3">VAT @ {VAT_PCT}</td><td class="num">{money(mrc_vat)}</td></tr>'
                     f'<tr class="grand"><td colspan="3">Total monthly (inc VAT)</td><td class="num">{money(mrc_ex + mrc_vat)} / mo</td></tr>'
                     "</tbody></table>"
                 )
@@ -2322,13 +2410,13 @@ with tab_customer_view:
                     '<th class="num">Unit (ex VAT)</th><th class="num">Total (ex VAT)</th></tr></thead><tbody>'
                     + rows
                     + f'<tr class="sub"><td colspan="3">Subtotal (ex VAT)</td><td class="num">{money(one_off_ex)}</td></tr>'
-                    f'<tr class="sub"><td colspan="3">VAT @ 20%</td><td class="num">{money(one_off_vat)}</td></tr>'
+                    f'<tr class="sub"><td colspan="3">VAT @ {VAT_PCT}</td><td class="num">{money(one_off_vat)}</td></tr>'
                     f'<tr class="grand"><td colspan="3">Total one-off (inc VAT)</td><td class="num">{money(one_off_ex + one_off_vat)}</td></tr>'
                     "</tbody></table>"
                 )
             render_html(
-                '<div class="nl-note"><b>Commercial notes:</b> Quotation valid for 30 calendar days.'
-                f' User licences are subject to a 36-month minimum term. {esc(APP_NAME)} hosted telephony is powered by {esc(POWERED_BY)}.</div>'
+                f'<div class="nl-note"><b>Commercial notes:</b> Quotation valid for {QUOTE_VALID_DAYS} calendar days.'
+                f' User licences are subject to a {CONTRACT_MONTHS}-month minimum term. {esc(APP_NAME)} hosted telephony is powered by {esc(POWERED_BY)}.</div>'
             )
 
 # ---------------- TAB 3: ADMIN · PRICING ----------------
@@ -2558,14 +2646,14 @@ with tab_admin:
                 # Advanced tariff (locked) + margin preview
                 with st.container(key="card-admin-tariff"):
                     section_header("🔒", "Advanced system deployment", "Fixed Novalink tariff · not editable")
-                    bands = [(1, 5), (6, 10), (11, 20), (21, 30), (31, 40), (41, 50)]
+                    bands = advanced_bands()
                     trows = "".join(
                         f'<tr><td>{a}–{b} users</td><td class="num"><b>{money(advanced_deployment_price(b))}</b></td></tr>'
                         for a, b in bands
                     )
                     render_html(
                         '<table class="nl-table"><thead><tr><th>Users on system</th><th class="num">Price (ex VAT)</th></tr></thead>'
-                        f'<tbody>{trows}<tr class="sub"><td colspan="2">…then +£750 for each further band of 10 users.</td></tr></tbody></table>'
+                        f'<tbody>{trows}<tr class="sub"><td colspan="2">…then +{money(ADVANCED_PRICE_PER_EXTRA_BAND)} for each further band of {ADVANCED_EXTRA_BAND_SIZE} users.</td></tr></tbody></table>'
                     )
 
 # ---------------- Hero (rendered last so the stepper reflects this run) ----------------
