@@ -39,7 +39,7 @@ import streamlit as st
 # #####################################################################
 
 # ---- Hosted user licences ------------------------------------------
-LICENCE_COST_PER_USER_MONTH = 8.00     # what the reseller pays you, per user per month (their minimum sell price)
+LICENCE_COST_PER_USER_MONTH = 7.00     # what the reseller pays you, per user per month (their minimum sell price)
 
 # ---- One-off charges -----------------------------------------------
 SETUP_COST_PER_USER = 3.00             # user setup & provisioning, per user (their minimum sell price)
