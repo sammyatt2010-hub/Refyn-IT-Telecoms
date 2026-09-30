@@ -15,7 +15,7 @@ from reportlab.lib import colors
 from reportlab.lib.pagesizes import A4
 from reportlab.lib.styles import ParagraphStyle, getSampleStyleSheet
 from reportlab.lib.utils import ImageReader
-from reportlab.platypus import HRFlowable, Image as RLImage, Paragraph, SimpleDocTemplate, Spacer, Table, TableStyle
+from reportlab.platypus import HRFlowable, Image as RLImage, PageBreak, Paragraph, SimpleDocTemplate, Spacer, Table, TableStyle
 import streamlit as st
 
 # ==========================================
@@ -343,7 +343,7 @@ NOVALINK_CSS = """
 
 .st-key-card-users, .st-key-card-hardware, .st-key-card-details, .st-key-card-summary,
 .st-key-card-cv-head, .st-key-card-cv-monthly, .st-key-card-cv-oneoff, .st-key-card-deploy,
-.st-key-card-admin, .st-key-card-admin-login, .st-key-card-admin-tariff, .st-key-card-admin-profit, .st-key-card-admin-order {
+.st-key-card-admin, .st-key-card-admin-login, .st-key-card-cv-setup, .st-key-card-admin-tariff, .st-key-card-admin-profit, .st-key-card-admin-order {
   background: linear-gradient(180deg, rgba(28, 31, 38, 0.88) 0%, rgba(20, 22, 28, 0.88) 100%);
   border: 1px solid var(--border) !important;
   border-radius: var(--radius);
@@ -507,6 +507,26 @@ NOVALINK_CSS = """
 .rit-p.zero { color: var(--faint); }
 .nl-table tr.grp td { font-size: 0.68rem; font-weight: 700; letter-spacing: .1em; text-transform: uppercase; color: var(--accent-2);
   padding: 14px 12px 6px 12px; border-bottom: 1px solid var(--border); }
+
+/* Build sheet */
+.st-key-card-deploy [data-testid="stExpander"] { margin-top: 16px; }
+.st-key-card-deploy [data-testid="stExpander"] summary p { color: var(--text) !important; font-weight: 700 !important; }
+.st-key-card-deploy [data-testid="stExpander"] details { border-color: rgba(234,86,36,.35) !important; }
+.rit-bs-intro { font-size: 0.82rem; color: var(--muted); margin-bottom: 6px; line-height: 1.45; }
+.rit-bs-read { display: flex; align-items: flex-start; gap: 8px; font-size: 0.84rem; color: var(--text); background: var(--surface-2);
+  border: 1px solid var(--border); border-radius: 10px; padding: 9px 12px; margin: 2px 0 12px 0; }
+.rit-bs-read svg { color: var(--good); flex-shrink: 0; margin-top: 2px; }
+.rit-bs-status { margin: 14px 0 10px 0; padding-top: 12px; border-top: 1px solid var(--border); }
+.rit-bs-status .h { font-size: 0.72rem; font-weight: 800; letter-spacing: .1em; text-transform: uppercase; color: var(--accent-2); margin-bottom: 8px; }
+.rit-cv-setup { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; }
+@media (max-width: 900px) { .rit-cv-setup { grid-template-columns: 1fr; } }
+.rit-cv-setup .big { font-size: 1.05rem; font-weight: 800; color: var(--text); }
+.rit-cv-setup .sm { font-size: 0.8rem; color: var(--muted); margin-top: 4px; line-height: 1.45; }
+.rit-cv-opt { display: flex; align-items: center; gap: 12px; padding: 8px 0; border-top: 1px solid var(--border); font-size: 0.86rem; }
+.rit-cv-opt .key { width: 28px; height: 28px; border-radius: 8px; display: grid; place-items: center; font-weight: 800;
+  background: var(--grad); color: #0B0C10; flex-shrink: 0; }
+.rit-cv-opt .o { font-weight: 700; color: var(--text); min-width: 110px; }
+.rit-cv-opt .w { color: var(--muted); }
 </style>
 """
 
@@ -1027,7 +1047,7 @@ def profit_summary(lines):
 # ==========================================
 # 8. PDF QUOTATION (ReportLab, A4)
 # ==========================================
-def generate_partner_order_pdf(order_meta, partner, end_customer, lines):
+def generate_partner_order_pdf(order_meta, partner, end_customer, lines, build_sheet=None, n_users=0):
     """Novalink -> Refyn-IT wholesale order. Shows ONLY Novalink prices - never the reseller's sell prices."""
     partner_plain = str(partner.get("company", ""))
     partner = {k: esc(v) for k, v in partner.items()}
@@ -1144,6 +1164,13 @@ def generate_partner_order_pdf(order_meta, partner, end_customer, lines):
         canvas.drawString(27, 18, f"{POWERED_BY} partner order · {partner_plain} · confidential")
         canvas.drawRightString(A4[0] - 27, 18, f"Page {d.page}")
         canvas.restoreState()
+
+    if build_sheet:
+        story.append(PageBreak())
+        story.append(Paragraph("Appendix · System build sheet", title_style))
+        story.append(Paragraph("Programming details captured by the partner with the customer.", sub_style))
+        story.append(HRFlowable(width="100%", thickness=1.5, color=c_primary, spaceAfter=8, spaceBefore=6))
+        story += build_sheet_flowables(build_sheet, build_sheet_parties(), c_primary, c_primary, n_users, sign_off=False)
 
     doc.build(story, onFirstPage=footer, onLaterPages=footer)
     buffer.seek(0)
@@ -1424,6 +1451,459 @@ def generate_quotation_pdf(quote_meta, reseller, customer, num_users, hw_items, 
 
 
 # ==========================================
+# 8b. SYSTEM SETUP ("BUILD SHEET") - programming details for the install team
+# ==========================================
+import re as _re
+
+BS_DAYS = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"]
+BS_TIMES = [f"{h:02d}:{m:02d}" for h in range(24) for m in (0, 15, 30, 45)] + ["23:59"]
+BS_HOURS_PRESETS = {
+    "Mon–Fri 09:00–17:00": (5, "09:00", "17:00"),
+    "Mon–Fri 08:30–17:30": (5, "08:30", "17:30"),
+    "Mon–Fri 08:00–18:00": (5, "08:00", "18:00"),
+    "Mon–Sat 09:00–17:00": (6, "09:00", "17:00"),
+    "Open 24/7": (7, "00:00", "23:59"),
+    "Custom hours": None,
+}
+BS_OOH_ACTIONS = [
+    "Closed message, then voicemail",
+    "Closed message, then hang up",
+    "Divert to a mobile / other number",
+    "Ring as normal (no out-of-hours)",
+]
+BS_AUDIO = ["Text-to-speech from the scripts below", "Customer will supply audio files", "Professional voiceover (quote separately)"]
+BS_RING_STYLES = ["All at once", "In order (hunt)", "Longest idle first", "Round robin"]
+BS_NO_ANSWER = ["Voicemail", "Overflow to another group", "Overflow to a mobile / number", "Keep queuing", "Back to main menu"]
+BS_NO_INPUT = ["Repeat menu once, then go to option 1", "Repeat menu once, then voicemail", "Go straight to option 1", "Hang up"]
+BS_NUMBERS = ["Port existing number(s)", "New number(s)", "Port existing + add new"]
+BS_CLI = ["Company main number", "Each user's direct dial", "Withheld"]
+BS_KEYS = ["1", "2", "3", "4", "5", "6", "7", "8", "9", "0"]
+BS_SOFTPHONE = "Softphone / app only"
+_EMAIL_RE = _re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
+
+BS_DEFAULT_WELCOME = "Thank you for calling [Company name]."
+BS_DEFAULT_GDPR = ("Please note that calls may be recorded for training and quality purposes. "
+                   "To find out how we use your personal data, please see the privacy notice on our website.")
+BS_DEFAULT_CLOSED = ("Thank you for calling. Our office is currently closed. Please leave a message after the tone "
+                     "and we'll call you back on the next working day.")
+
+
+def _bs_init():
+    ss = st.session_state
+    defaults = {
+        "bs_hours_preset": "Mon–Fri 09:00–17:00", "bs_bank_hols": True,
+        "bs_ooh_action": BS_OOH_ACTIONS[0], "bs_ooh_divert": "", "bs_closed_text": BS_DEFAULT_CLOSED,
+        "bs_welcome_on": True, "bs_welcome_text": BS_DEFAULT_WELCOME,
+        "bs_gdpr_on": True, "bs_gdpr_text": BS_DEFAULT_GDPR, "bs_audio": BS_AUDIO[0],
+        "bs_ivr_on": True, "bs_no_input": BS_NO_INPUT[0],
+        "bs_vm_email": "", "bs_numbers": BS_NUMBERS[0], "bs_main_number": "", "bs_provider": "",
+        "bs_port_postcode": "", "bs_cli": BS_CLI[0], "bs_notes": "", "bs_users_ver": 0,
+    }
+    for k, v in defaults.items():
+        if k not in ss:
+            ss[k] = v
+    if "bs_hours_base" not in ss:
+        ss.bs_hours_base = pd.DataFrame([
+            {"Day": d, "Open": i < 5, "From": "09:00", "To": "17:00"} for i, d in enumerate(BS_DAYS)])
+    if "bs_flow_base" not in ss:
+        ss.bs_flow_base = pd.DataFrame([
+            {"Key": "1", "Option": "Sales", "Who rings": "", "Ring style": "All at once", "Ring (secs)": 20,
+             "If no answer": "Voicemail", "Then / voicemail email": ""},
+            {"Key": "2", "Option": "Accounts", "Who rings": "", "Ring style": "All at once", "Ring (secs)": 20,
+             "If no answer": "Voicemail", "Then / voicemail email": ""},
+        ])
+    if "bs_direct_base" not in ss:
+        ss.bs_direct_base = pd.DataFrame([
+            {"Who rings": "", "Ring style": "All at once", "Ring (secs)": 20,
+             "If no answer": "Voicemail", "Then / voicemail email": ""}])
+
+
+def _bs_user_rows(n, existing):
+    rows = existing.to_dict("records") if existing is not None else []
+    rows = rows[:n]
+    for i in range(len(rows), n):
+        rows.append({"First name": "", "Last name": "", "Email": "", "Extension": str(201 + i),
+                     "Device": BS_SOFTPHONE, "Mobile app": True, "Voicemail to email": True, "Direct dial (DDI)": ""})
+    return pd.DataFrame(rows, columns=["First name", "Last name", "Email", "Extension", "Device",
+                                       "Mobile app", "Voicemail to email", "Direct dial (DDI)"])
+
+
+def _clean_df(df):
+    if df is None:
+        return []
+    out = []
+    for r in df.to_dict("records"):
+        out.append({k: ("" if (v is None or (isinstance(v, float) and math.isnan(v))) else v) for k, v in r.items()})
+    return out
+
+
+def bs_hours_rows():
+    ss = st.session_state
+    preset = BS_HOURS_PRESETS.get(ss.get("bs_hours_preset"))
+    if preset:
+        n_days, a, b = preset
+        return [{"Day": d, "Open": i < n_days, "From": a, "To": b} for i, d in enumerate(BS_DAYS)]
+    return _clean_df(ss.get("bs_hours_latest", ss.get("bs_hours_base")))
+
+
+def bs_hours_summary(rows):
+    open_rows = [r for r in rows if r.get("Open")]
+    if not open_rows:
+        return "Closed all week"
+    if len(open_rows) == 7 and all(r["From"] == "00:00" and r["To"] == "23:59" for r in open_rows):
+        return "Open 24/7"
+    groups = []
+    for r in open_rows:
+        t = f'{r["From"]}–{r["To"]}'
+        if groups and groups[-1][2] == t and BS_DAYS.index(r["Day"]) == BS_DAYS.index(groups[-1][1]) + 1:
+            groups[-1][1] = r["Day"]
+        else:
+            groups.append([r["Day"], r["Day"], t])
+    return ", ".join((f"{a[:3]}–{b[:3]}" if a != b else a[:3]) + f" {t}" for a, b, t in groups)
+
+
+def bs_menu_script(flow):
+    parts = [f'For {r["Option"]}, press {r["Key"]}.' for r in flow if r.get("Option") and r.get("Key")]
+    return " ".join(parts)
+
+
+def build_sheet_data():
+    ss = st.session_state
+    ivr = bool(ss.get("bs_ivr_on"))
+    flow_df = ss.get("bs_flow_latest", ss.get("bs_flow_base")) if ivr else ss.get("bs_direct_latest", ss.get("bs_direct_base"))
+    flow = [r for r in _clean_df(flow_df) if any(str(v).strip() for k, v in r.items() if k not in ("Ring (secs)",))]
+    if ivr:
+        flow = sorted(flow, key=lambda r: BS_KEYS.index(str(r.get("Key"))) if str(r.get("Key")) in BS_KEYS else 99)
+    users = _clean_df(ss.get("bs_users_latest"))
+    return {
+        "hours_preset": ss.get("bs_hours_preset"), "hours": bs_hours_rows(), "bank_hols": ss.get("bs_bank_hols"),
+        "ooh_action": ss.get("bs_ooh_action"), "ooh_divert": ss.get("bs_ooh_divert", ""),
+        "closed_text": ss.get("bs_closed_text", ""),
+        "welcome_on": ss.get("bs_welcome_on"), "welcome_text": ss.get("bs_welcome_text", ""),
+        "gdpr_on": ss.get("bs_gdpr_on"), "gdpr_text": ss.get("bs_gdpr_text", ""), "audio": ss.get("bs_audio"),
+        "ivr_on": ivr, "no_input": ss.get("bs_no_input"), "flow": flow, "menu_script": bs_menu_script(flow) if ivr else "",
+        "users": users, "vm_email": ss.get("bs_vm_email", ""),
+        "numbers": ss.get("bs_numbers"), "main_number": ss.get("bs_main_number", ""),
+        "provider": ss.get("bs_provider", ""), "port_postcode": ss.get("bs_port_postcode", ""),
+        "cli": ss.get("bs_cli"), "notes": ss.get("bs_notes", ""),
+    }
+
+
+def build_sheet_checks(bs, n_users):
+    """(label, ok) list the install team needs before they can build."""
+    porting = bs["numbers"] != "New number(s)"
+    uses_vm = any("Voicemail" in str(r.get("If no answer", "")) for r in bs["flow"]) or "voicemail" in (bs["ooh_action"] or "")
+    users = bs["users"]
+    checks = [
+        ("Opening hours", any(r.get("Open") for r in bs["hours"])),
+        ("Welcome message", (not bs["welcome_on"]) or (bs["welcome_text"].strip() and "[Company name]" not in bs["welcome_text"])),
+        ("Call routing: who answers each option", bool(bs["flow"]) and all(str(r.get("Who rings", "")).strip() for r in bs["flow"])
+         and (not bs["ivr_on"] or all(str(r.get("Option", "")).strip() for r in bs["flow"]))),
+        (f"User names ({n_users})", n_users > 0 and len(users) == n_users
+         and all(str(u.get("First name", "")).strip() for u in users)),
+        ("User email addresses", n_users > 0 and len(users) == n_users
+         and all(_EMAIL_RE.match(str(u.get("Email", "")).strip()) for u in users)),
+        ("Number details" + (" (porting)" if porting else ""), (not porting) or (bool(bs["main_number"].strip()) and bool(bs["provider"].strip()))),
+    ]
+    if bs["ooh_action"] == BS_OOH_ACTIONS[2]:
+        checks.insert(1, ("Out-of-hours divert number", bool(bs["ooh_divert"].strip())))
+    if uses_vm:
+        checks.insert(-1, ("Main voicemail email", bool(_EMAIL_RE.match(bs["vm_email"].strip()))))
+    return checks
+
+
+def render_build_sheet_form():
+    """The 'System setup details' drop-down inside the Deployment card."""
+    _bs_init()
+    ss = st.session_state
+    n_users = int(ss.get("num_licences", 0))
+    with st.expander("System setup details  ·  IVR, opening hours, call routing, users & voicemail", expanded=False):
+        render_html('<div class="rit-bs-intro">Fill this in with your customer. It becomes the <b>build sheet</b> our '
+                    'engineers programme the system from. Anything left blank can be finished later.</div>')
+        t_hours, t_calls, t_users, t_vm = st.tabs(["1 · Hours", "2 · Greeting & menu", "3 · Users", "4 · Voicemail & numbers"])
+
+        # ---- 1. Hours ----
+        with t_hours:
+            h1, h2 = st.columns([1.4, 1])
+            with h1:
+                st.selectbox("Opening hours", list(BS_HOURS_PRESETS.keys()), key="bs_hours_preset")
+            with h2:
+                st.checkbox("Closed on UK bank holidays", key="bs_bank_hols")
+            if ss.bs_hours_preset == "Custom hours":
+                ss.bs_hours_latest = st.data_editor(
+                    ss.bs_hours_base, key="bs_hours_ed", hide_index=True, num_rows="fixed", **FULL_WIDTH,
+                    column_config={
+                        "Day": st.column_config.TextColumn(disabled=True),
+                        "Open": st.column_config.CheckboxColumn(),
+                        "From": st.column_config.SelectboxColumn(options=BS_TIMES, required=True),
+                        "To": st.column_config.SelectboxColumn(options=BS_TIMES, required=True),
+                    })
+            else:
+                render_html(f'<div class="rit-bs-read">{icon("check", 13, 3)}{esc(bs_hours_summary(bs_hours_rows()))}</div>')
+            o1, o2 = st.columns([1.4, 1])
+            with o1:
+                st.selectbox("Out of hours, calls should…", BS_OOH_ACTIONS, key="bs_ooh_action")
+            with o2:
+                if ss.bs_ooh_action == BS_OOH_ACTIONS[2]:
+                    st.text_input("Divert to number", key="bs_ooh_divert", placeholder="e.g. 07700 900123")
+            if ss.bs_ooh_action in BS_OOH_ACTIONS[:2]:
+                st.text_area("Closed message", key="bs_closed_text", height=80)
+
+        # ---- 2. Greeting & menu ----
+        with t_calls:
+            g1, g2 = st.columns(2)
+            with g1:
+                st.checkbox("Play a welcome message", key="bs_welcome_on")
+            with g2:
+                st.checkbox("Play a call-recording / GDPR notice", key="bs_gdpr_on")
+            if ss.bs_welcome_on:
+                st.text_input("Welcome message", key="bs_welcome_text")
+            if ss.bs_gdpr_on:
+                st.text_area("Recording / GDPR notice", key="bs_gdpr_text", height=72)
+            st.selectbox("How are the messages recorded?", BS_AUDIO, key="bs_audio")
+            render_html('<div class="rit-admin-h">Call routing (in hours)</div>')
+            st.toggle("Use a menu — “press 1 for sales, 2 for accounts…”", key="bs_ivr_on")
+            common = {
+                "Who rings": st.column_config.TextColumn("Who rings", help="Names or extensions, e.g. Jo, Sam, 203",
+                                                         width="medium"),
+                "Ring style": st.column_config.SelectboxColumn("Ring style", options=BS_RING_STYLES, required=True),
+                "Ring (secs)": st.column_config.NumberColumn("Ring (secs)", min_value=5, max_value=120, step=5),
+                "If no answer": st.column_config.SelectboxColumn("If no answer", options=BS_NO_ANSWER, required=True),
+                "Then / voicemail email": st.column_config.TextColumn(
+                    "Then… / voicemail email", help="Overflow group or number, or the email voicemails go to"),
+            }
+            if ss.bs_ivr_on:
+                ss.bs_flow_latest = st.data_editor(
+                    ss.bs_flow_base, key="bs_flow_ed", hide_index=True, num_rows="dynamic", **FULL_WIDTH,
+                    column_config={
+                        "Key": st.column_config.SelectboxColumn("Key", options=BS_KEYS, required=True, width="small"),
+                        "Option": st.column_config.TextColumn("Option", help="e.g. Sales, Accounts, Support"),
+                        **common,
+                    })
+                script = bs_menu_script(build_sheet_data()["flow"])
+                if script:
+                    render_html(f'<div class="rit-bs-read">{icon("phone", 13)}<span><b>Menu will say:</b> “{esc(script)}”</span></div>')
+                st.selectbox("If the caller doesn't press anything", BS_NO_INPUT, key="bs_no_input")
+            else:
+                ss.bs_direct_latest = st.data_editor(
+                    ss.bs_direct_base, key="bs_direct_ed", hide_index=True, num_rows="fixed", **FULL_WIDTH,
+                    column_config=common)
+            st.caption("Add a row per menu option. Use the ＋ at the bottom of the table for more options.")
+
+        # ---- 3. Users ----
+        with t_users:
+            if n_users == 0:
+                render_html('<div class="nl-empty">Set the number of users in step 01 and a row appears here for each one.</div>')
+            else:
+                current = ss.get("bs_users_latest")
+                if current is None or len(current) != n_users:
+                    ss.bs_users_base = _bs_user_rows(n_users, current)
+                    ss.bs_users_ver += 1
+                devices = [BS_SOFTPHONE] + [i["name"] for i in basket_items()] + ["Customer's own device"]
+                ss.bs_users_latest = st.data_editor(
+                    ss.bs_users_base, key=f"bs_users_ed_{ss.bs_users_ver}", hide_index=True, num_rows="fixed", **FULL_WIDTH,
+                    column_config={
+                        "Email": st.column_config.TextColumn("Email", help="Login & voicemail-to-email address"),
+                        "Extension": st.column_config.TextColumn("Ext.", width="small"),
+                        "Device": st.column_config.SelectboxColumn("Device", options=devices, required=True),
+                        "Mobile app": st.column_config.CheckboxColumn("App", width="small"),
+                        "Voicemail to email": st.column_config.CheckboxColumn("VM → email", width="small"),
+                        "Direct dial (DDI)": st.column_config.TextColumn("Direct dial", help="Optional direct number"),
+                    })
+                st.caption(f"One row per licence ({n_users}). Changing the number of users adds or removes rows.")
+
+        # ---- 4. Voicemail & numbers ----
+        with t_vm:
+            v1, v2 = st.columns(2)
+            with v1:
+                st.text_input("Main / shared voicemail goes to (email)", key="bs_vm_email", placeholder="e.g. office@customer.co.uk")
+            with v2:
+                st.selectbox("Outgoing caller ID", BS_CLI, key="bs_cli")
+            n1, n2 = st.columns(2)
+            with n1:
+                st.selectbox("Phone numbers", BS_NUMBERS, key="bs_numbers")
+            with n2:
+                st.text_input("Main number" + (" to port" if ss.bs_numbers != "New number(s)" else " (if known)"),
+                              key="bs_main_number", placeholder="e.g. 01234 567890")
+            if ss.bs_numbers != "New number(s)":
+                p1, p2 = st.columns(2)
+                with p1:
+                    st.text_input("Current phone provider", key="bs_provider", placeholder="e.g. BT")
+                with p2:
+                    st.text_input("Postcode the numbers are billed to", key="bs_port_postcode")
+            st.text_area("Anything else our engineers should know?", key="bs_notes", height=72,
+                         placeholder="e.g. hold music, call queue announcements, specific user ringing rules")
+
+        # ---- Status + download ----
+        bs = build_sheet_data()
+        checks = build_sheet_checks(bs, n_users)
+        done = sum(1 for _, ok in checks if ok)
+        chips = "".join(chip(("✓ " if ok else "○ ") + lbl, "good" if ok else "muted") for lbl, ok in checks)
+        render_html(f'<div class="rit-bs-status"><div class="h">Build sheet {done}/{len(checks)} complete</div>'
+                    f'<div class="pe-chips">{chips}</div></div>')
+        b1, b2 = st.columns(2)
+        with b1:
+            if st.button("Prepare build sheet PDF", key="bs_make", **FULL_WIDTH):
+                ss.bs_pdf = generate_build_sheet_pdf(bs, build_sheet_parties())
+        with b2:
+            if ss.get("bs_pdf"):
+                st.download_button("Download build sheet PDF", data=ss.bs_pdf, key="bs_dl", mime="application/pdf",
+                                   file_name=f"Build-sheet-{build_sheet_parties()['ref']}.pdf", type="primary", **FULL_WIDTH)
+    return done, len(checks)
+
+
+def build_sheet_parties():
+    d = st.session_state.get("active_quote_details")
+    if d:
+        return {"ref": d["meta"]["ref"], "customer": d["customer"]["company"], "contact": d["customer"]["name"],
+                "site": d["customer"].get("delivery", ""), "reseller": d["reseller"]["company"],
+                "reseller_contact": d["reseller"]["name"]}
+    return {"ref": "DRAFT", "customer": "", "contact": "", "site": "", "reseller": SETTINGS.get("company_name", ""),
+            "reseller_contact": ""}
+
+
+def build_sheet_flowables(bs, parties, c_primary, c_head, n_users, sign_off=True):
+    styles = getSampleStyleSheet()
+    c_dark, c_bg, c_border, c_slate = (colors.HexColor("#0F172A"), colors.HexColor("#F7F7F8"),
+                                       colors.HexColor("#D4D9DF"), colors.HexColor("#475569"))
+    sec = ParagraphStyle("BSH", parent=styles["Normal"], fontName="Helvetica-Bold", fontSize=10.5, leading=14,
+                         textColor=c_primary, spaceBefore=8, spaceAfter=4)
+    td = ParagraphStyle("BSTD", parent=styles["Normal"], fontName="Helvetica", fontSize=8.3, leading=11, textColor=c_dark)
+    tdb = ParagraphStyle("BSTDB", parent=td, fontName="Helvetica-Bold")
+    th = ParagraphStyle("BSTH", parent=td, fontName="Helvetica-Bold", textColor=colors.white)
+    miss = "<font color='#B45309'><i>To confirm</i></font>"
+
+    def v(x):
+        x = str(x if x is not None else "").strip()
+        return esc(x) if x else miss
+
+    def grid(rows, widths, header=True):
+        t = Table(rows, colWidths=widths, repeatRows=1 if header else 0)
+        style = [("BOX", (0, 0), (-1, -1), 0.8, c_border), ("INNERGRID", (0, 0), (-1, -1), 0.4, c_border),
+                 ("VALIGN", (0, 0), (-1, -1), "TOP"), ("TOPPADDING", (0, 0), (-1, -1), 4),
+                 ("BOTTOMPADDING", (0, 0), (-1, -1), 4), ("LEFTPADDING", (0, 0), (-1, -1), 6)]
+        if header:
+            style.append(("BACKGROUND", (0, 0), (-1, 0), c_head))
+        t.setStyle(TableStyle(style))
+        return t
+
+    def kv(pairs):
+        rows = [[Paragraph(f"<b>{esc(k)}</b>", td), Paragraph(val, td)] for k, val in pairs]
+        t = grid(rows, [150, 390], header=False)
+        t.setStyle(TableStyle([("BACKGROUND", (0, 0), (0, -1), c_bg)]))
+        return t
+
+    out = []
+    out.append(kv([
+        ("Customer", v(parties["customer"])), ("Contact", v(parties["contact"])),
+        ("Site", v(parties["site"] if parties["site"] != "N/A" else "")),
+        ("Partner", f'{v(parties["reseller"])} · {v(parties["reseller_contact"])}'),
+        ("Users / licences", str(n_users)), ("Quote ref", esc(parties["ref"])),
+    ]))
+
+    out.append(Paragraph("1. Opening hours", sec))
+    hrs = [[Paragraph(x, th) for x in ("Day", "Open?", "From", "To")]]
+    for r in bs["hours"]:
+        o = bool(r.get("Open"))
+        hrs.append([Paragraph(esc(r["Day"]), td), Paragraph("Open" if o else "Closed", tdb if o else td),
+                    Paragraph(esc(r["From"]) if o else "—", td), Paragraph(esc(r["To"]) if o else "—", td)])
+    out.append(grid(hrs, [150, 130, 130, 130]))
+    ooh = esc(bs["ooh_action"] or "")
+    if bs["ooh_action"] == BS_OOH_ACTIONS[2]:
+        ooh += f" → {v(bs['ooh_divert'])}"
+    pairs = [("Bank holidays", "Closed" if bs["bank_hols"] else "Normal hours"), ("Out of hours", ooh)]
+    if bs["ooh_action"] in BS_OOH_ACTIONS[:2]:
+        pairs.append(("Closed message", v(bs["closed_text"])))
+    out.append(Spacer(1, 4))
+    out.append(kv(pairs))
+
+    out.append(Paragraph("2. Greeting, recording notice &amp; menu", sec))
+    pairs = [("Welcome message", v(bs["welcome_text"]) if bs["welcome_on"] else "None"),
+             ("Recording / GDPR notice", v(bs["gdpr_text"]) if bs["gdpr_on"] else "None"),
+             ("Recordings", esc(bs["audio"] or ""))]
+    if bs["ivr_on"]:
+        pairs += [("Menu message", v(bs["menu_script"])), ("No key pressed", esc(bs["no_input"] or ""))]
+    else:
+        pairs.append(("Menu", "No menu — calls ring straight through"))
+    out.append(kv(pairs))
+    out.append(Spacer(1, 4))
+    head = (["Key", "Option"] if bs["ivr_on"] else []) + ["Who rings", "Ring style", "Ring", "If no answer", "Then / VM email"]
+    rows = [[Paragraph(x, th) for x in head]]
+    for r in bs["flow"] or [{}]:
+        secs = r.get("Ring (secs)")
+        cells = ([Paragraph(v(r.get("Key")), tdb), Paragraph(v(r.get("Option")), tdb)] if bs["ivr_on"] else []) + [
+            Paragraph(v(r.get("Who rings")), td), Paragraph(v(r.get("Ring style")), td),
+            Paragraph(f"{int(secs)}s" if str(secs).replace(".0", "").isdigit() else miss, td),
+            Paragraph(v(r.get("If no answer")), td), Paragraph(esc(str(r.get("Then / voicemail email", "") or "—")), td)]
+        rows.append(cells)
+    widths = [32, 70, 120, 72, 36, 90, 120] if bs["ivr_on"] else [150, 80, 40, 110, 160]
+    out.append(grid(rows, widths))
+
+    out.append(Paragraph("3. Users", sec))
+    urows = [[Paragraph(x, th) for x in ("Name", "Email", "Ext.", "Device", "App", "VM mail", "Direct dial")]]
+    for u in bs["users"] or []:
+        name = f'{u.get("First name", "")} {u.get("Last name", "")}'.strip()
+        urows.append([Paragraph(v(name), tdb), Paragraph(v(u.get("Email")), td), Paragraph(v(u.get("Extension")), td),
+                      Paragraph(v(u.get("Device")), td), Paragraph("Yes" if u.get("Mobile app") else "No", td),
+                      Paragraph("Yes" if u.get("Voicemail to email") else "No", td),
+                      Paragraph(esc(str(u.get("Direct dial (DDI)", "") or "—")), td)])
+    if len(urows) == 1:
+        urows.append([Paragraph(miss, td)] + [""] * 6)
+    out.append(grid(urows, [95, 145, 34, 110, 30, 50, 76]))
+
+    out.append(Paragraph("4. Voicemail &amp; numbers", sec))
+    pairs = [("Main voicemail to", v(bs["vm_email"])), ("Outgoing caller ID", esc(bs["cli"] or "")),
+             ("Numbers", esc(bs["numbers"] or "")), ("Main number", v(bs["main_number"]))]
+    if bs["numbers"] != "New number(s)":
+        pairs += [("Current provider", v(bs["provider"])), ("Billing postcode", v(bs["port_postcode"]))]
+    pairs.append(("Notes", esc(bs["notes"]) if bs["notes"].strip() else "—"))
+    out.append(kv(pairs))
+
+    if sign_off:
+        out.append(Spacer(1, 10))
+        out.append(Paragraph("<font size=7.5 color='#475569'>By signing, the customer confirms these details are correct. "
+                             "Changes after the system is built may be chargeable.</font>", td))
+        out.append(Spacer(1, 4))
+        s = grid([[Paragraph("<b>Customer signature:</b> ______________________________", td),
+                   Paragraph("<b>Date:</b> ____________________", td)]], [340, 200], header=False)
+        s.setStyle(TableStyle([("BACKGROUND", (0, 0), (-1, -1), c_bg), ("TOPPADDING", (0, 0), (-1, -1), 8),
+                               ("BOTTOMPADDING", (0, 0), (-1, -1), 8)]))
+        out.append(s)
+    return out
+
+
+def generate_build_sheet_pdf(bs, parties):
+    buffer = io.BytesIO()
+    doc = SimpleDocTemplate(buffer, pagesize=A4, rightMargin=27, leftMargin=27, topMargin=28, bottomMargin=40,
+                            title=f"Build sheet {parties['ref']}", author=APP_NAME)
+    styles = getSampleStyleSheet()
+    story = []
+    left = []
+    logo = asset(BRAND_LOGO_PDF_FILE)
+    if os.path.exists(logo):
+        iw, ih = ImageReader(logo).getSize()
+        left.append(RLImage(logo, width=150, height=150 * ih / iw, hAlign="LEFT"))
+        left.append(Spacer(1, 6))
+    left.append(Paragraph("System Build Sheet", ParagraphStyle("t", parent=styles["Normal"], fontName="Helvetica-Bold",
+                                                                fontSize=15, leading=19)))
+    left.append(Paragraph(f"Programming details · powered by <b>{POWERED_BY}</b>",
+                          ParagraphStyle("s", parent=styles["Normal"], fontSize=8, textColor=colors.HexColor("#475569"))))
+    hdr = Table([[left, Paragraph(f"<b>Ref:</b> {esc(parties['ref'])}<br/><b>Date:</b> {datetime.now().strftime('%d %B %Y')}",
+                                  ParagraphStyle("m", parent=styles["Normal"], fontSize=8.5, leading=12, alignment=2))]],
+                colWidths=[350, 190])
+    hdr.setStyle(TableStyle([("VALIGN", (0, 0), (-1, -1), "BOTTOM"), ("LEFTPADDING", (0, 0), (0, 0), 0)]))
+    story += [hdr, Spacer(1, 6), HRFlowable(width="100%", thickness=1.5, color=colors.HexColor("#EA5624"), spaceAfter=8)]
+    story += build_sheet_flowables(bs, parties, colors.HexColor("#EA5624"), colors.HexColor("#1F232A"),
+                                   int(st.session_state.get("num_licences", 0)))
+    doc.build(story, onFirstPage=_pdf_footer, onLaterPages=_pdf_footer)
+    return buffer.getvalue()
+
+
+def users_csv(bs):
+    return pd.DataFrame(bs["users"]).to_csv(index=False).encode("utf-8")
+
+
+# ==========================================
 # 9. PAGE
 # ==========================================
 LICENCE_FEATURES = [
@@ -1527,6 +2007,7 @@ with tab_builder:
             if users == 0:
                 render_html(f'<div class="pe-hint">{icon("alert", 14)}<span>Deployment is added once you set the number of users.'
                             ' Advanced pricing shown is for 1–5 users.</span></div>')
+            render_build_sheet_form()
 
         # ===== 03 · Hardware =====
         with st.container(key="card-hardware"):
@@ -1779,6 +2260,37 @@ with tab_customer_view:
             else:
                 render_html('<div class="nl-empty">No user licences selected yet.</div>')
 
+        _bs_cv = build_sheet_data() if "bs_hours_preset" in st.session_state else None
+        if _bs_cv and users > 0:
+            with st.container(key="card-cv-setup"):
+                section_header("✓", "How your system will work", "Summary of your setup · confirm with your account manager")
+                _named = [u for u in _bs_cv["users"] if str(u.get("First name", "")).strip()]
+                if _bs_cv["ivr_on"] and _bs_cv["flow"]:
+                    _route = "".join(
+                        f'<div class="rit-cv-opt"><span class="key">{esc(r.get("Key", ""))}</span>'
+                        f'<span class="o">{esc(r.get("Option", "") or "—")}</span>'
+                        f'<span class="w">rings {esc(r.get("Who rings", "") or "to confirm")}, then {esc(str(r.get("If no answer", "")).lower())}</span></div>'
+                        for r in _bs_cv["flow"])
+                else:
+                    _f = (_bs_cv["flow"] or [{}])[0]
+                    _route = (f'<div class="rit-cv-opt"><span class="key">☎</span><span class="o">All calls</span>'
+                              f'<span class="w">ring {esc(_f.get("Who rings", "") or "to confirm")}, then {esc(str(_f.get("If no answer", "")).lower())}</span></div>')
+                render_html(
+                    '<div class="rit-cv-setup">'
+                    f'<div class="pe-panel"><div class="h">Opening hours</div><div class="big">{esc(bs_hours_summary(_bs_cv["hours"]))}</div>'
+                    f'<div class="sm">Out of hours: {esc(_bs_cv["ooh_action"] or "")}</div></div>'
+                    f'<div class="pe-panel"><div class="h">Callers hear</div><div class="sm">'
+                    + (f'“{esc(_bs_cv["welcome_text"])}”<br>' if _bs_cv["welcome_on"] else "")
+                    + ("Call-recording / GDPR notice<br>" if _bs_cv["gdpr_on"] else "")
+                    + (f'“{esc(_bs_cv["menu_script"])}”' if _bs_cv["ivr_on"] and _bs_cv["menu_script"] else "")
+                    + '</div></div>'
+                    f'<div class="pe-panel"><div class="h">Users set up</div><div class="big">{len(_named)} of {users}</div>'
+                    f'<div class="sm">{esc(", ".join((str(u.get("First name", "")) + " " + str(u.get("Last name", ""))).strip() for u in _named[:6]))}'
+                    + (" …" if len(_named) > 6 else "") + '</div></div>'
+                    '</div>'
+                    f'<div class="nl-lines-h">Call routing</div>{_route}'
+                )
+
         with st.container(key="card-cv-oneoff"):
             section_header("2", "One-off upfront costs", "Setup, deployment and hardware, billed once")
             rows = ""
@@ -1954,7 +2466,8 @@ with tab_admin:
                                     order_meta = {"ref": cref.replace(QUOTE_PREFIX, "NLP", 1), "customer_ref": cref,
                                                   "date": datetime.now().strftime("%d %B %Y")}
                                     st.session_state.partner_order_pdf = generate_partner_order_pdf(
-                                        order_meta, details["reseller"], details["customer"], a_lines)
+                                        order_meta, details["reseller"], details["customer"], a_lines,
+                                        build_sheet=build_sheet_data(), n_users=a_users)
                                     st.session_state.partner_order_ref = order_meta["ref"]
                                 if st.session_state.get("partner_order_pdf"):
                                     st.download_button(
@@ -1962,8 +2475,18 @@ with tab_admin:
                                         data=st.session_state.partner_order_pdf,
                                         file_name=f"{st.session_state.partner_order_ref}.pdf",
                                         mime="application/pdf", key="dl_partner", **FULL_WIDTH)
-                                    st.caption(f"Send this to {POWERED_BY} to place the order. "
-                                               "It shows only partner prices and the end customer's name and site.")
+                                    st.caption(f"Send this to {POWERED_BY} to place the order. It shows only partner prices "
+                                               "and the end customer's name and site, with the system build sheet attached.")
+                                    _bs_now = build_sheet_data()
+                                    _chk = build_sheet_checks(_bs_now, a_users)
+                                    _missing = [lbl for lbl, ok in _chk if not ok]
+                                    if _missing:
+                                        st.info("Build sheet still to complete: " + ", ".join(_missing) +
+                                                " (Build quotation → 02 Deployment → System setup details).")
+                                    if _bs_now["users"]:
+                                        st.download_button("Download users list (CSV)", data=users_csv(_bs_now),
+                                                           file_name=f"{st.session_state.partner_order_ref}-users.csv",
+                                                           mime="text/csv", key="dl_users_csv", **FULL_WIDTH)
 
             # ===== PRICING SETTINGS =====
             with sub_pricing:
