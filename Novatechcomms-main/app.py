@@ -21,13 +21,26 @@ import streamlit as st
 # ==========================================
 # 1. PAGE CONFIGURATION & BRAND
 # ==========================================
+# All files are found next to app.py, so the app works even when it lives in a
+# sub-folder of the repo (Streamlit Cloud runs from the repo root).
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+
+
+def asset(path):
+    """Absolute path for a file stored alongside app.py (falls back to the repo root)."""
+    if not path or os.path.isabs(path):
+        return path
+    here = os.path.join(BASE_DIR, path)
+    return here if os.path.exists(here) or not os.path.exists(path) else path
+
+
 BRAND_ICON_FILE = "refynit_icon.png"      # orange hexagon "R" (favicon / login)
 BRAND_LOGO_FILE = "refynit_logo.png"      # light wordmark for the dark app
 BRAND_LOGO_PDF_FILE = "refynit_logo_dark.png"  # dark wordmark for the white PDF
 
 st.set_page_config(
     page_title="Refyn-IT Telecoms · Quotation",
-    page_icon=BRAND_ICON_FILE if os.path.exists(BRAND_ICON_FILE) else "📞",
+    page_icon=asset(BRAND_ICON_FILE) if os.path.exists(asset(BRAND_ICON_FILE)) else "📞",
     layout="wide",
     initial_sidebar_state="collapsed",
 )
@@ -569,6 +582,7 @@ def money(v: float) -> str:
 
 @st.cache_data
 def brand_img_uri(path):
+    path = asset(path)
     if path and os.path.exists(path):
         with open(path, "rb") as f:
             return "data:image/png;base64," + base64.b64encode(f.read()).decode("utf-8")
@@ -650,6 +664,7 @@ if not check_password():
 # ==========================================
 @st.cache_data
 def get_base64_image(image_path):
+    image_path = asset(image_path)
     if image_path and os.path.exists(image_path):
         with open(image_path, "rb") as img_file:
             encoded = base64.b64encode(img_file.read()).decode("utf-8")
@@ -664,7 +679,7 @@ def get_base64_image(image_path):
 # 5. HARDWARE & ACCESSORIES CATALOGUE
 # ==========================================
 VAT_RATE = 0.20
-CATALOGUE_FILE = "catalogue.json"
+CATALOGUE_FILE = asset("catalogue.json")
 
 _FALLBACK_PRODUCTS = [
     # --- Fanvil Core Series ---
@@ -744,7 +759,9 @@ DEPLOYMENT_DESCS = {
     DEPLOY_ADVANCED: "Fully managed deployment · system design, build, installation & go-live support",
 }
 
-SETTINGS_FILE = "pricing_settings.json"
+SETTINGS_NAME = "pricing_settings.json"
+SETTINGS_FILE = os.path.join(BASE_DIR, SETTINGS_NAME)
+QUOTES_FILE = os.path.join(BASE_DIR, "quotes.csv")
 DEFAULT_SETTINGS = {
     "licence_monthly": FLOOR_LICENCE_MONTHLY,
     "setup_per_user": FLOOR_SETUP_PER_USER,
@@ -806,7 +823,7 @@ def _gh_config():
     token, repo = _secret("GITHUB_TOKEN"), _secret("GITHUB_REPO")
     if token and repo:
         return {"token": token, "repo": repo, "branch": _secret("GITHUB_BRANCH", "main"),
-                "path": _secret("GITHUB_SETTINGS_PATH", SETTINGS_FILE)}
+                "path": _secret("GITHUB_SETTINGS_PATH", SETTINGS_NAME)}
     return None
 
 
@@ -1178,10 +1195,11 @@ def generate_quotation_pdf(quote_meta, reseller, customer, num_users, hw_items, 
 
     # Header: logo + title | metadata
     left_cell = []
-    if os.path.exists(BRAND_LOGO_PDF_FILE):
-        iw, ih = ImageReader(BRAND_LOGO_PDF_FILE).getSize()
+    pdf_logo = asset(BRAND_LOGO_PDF_FILE)
+    if os.path.exists(pdf_logo):
+        iw, ih = ImageReader(pdf_logo).getSize()
         logo_w = 170
-        left_cell.append(RLImage(BRAND_LOGO_PDF_FILE, width=logo_w, height=logo_w * ih / iw, hAlign="LEFT"))
+        left_cell.append(RLImage(pdf_logo, width=logo_w, height=logo_w * ih / iw, hAlign="LEFT"))
         left_cell.append(Spacer(1, 6))
     left_cell.append(Paragraph("Telecoms Quotation", title_style))
     left_cell.append(Paragraph(f"Hosted cloud telephony · powered by <b>{POWERED_BY}</b>", sub_style))
@@ -1634,10 +1652,10 @@ with tab_builder:
                         "Hardware Summary": [hw_summary], "Delivery Address": [full_delivery],
                     }
                     df = pd.DataFrame(record)
-                    if not os.path.isfile("quotes.csv"):
-                        df.to_csv("quotes.csv", index=False)
+                    if not os.path.isfile(QUOTES_FILE):
+                        df.to_csv(QUOTES_FILE, index=False)
                     else:
-                        df.to_csv("quotes.csv", mode="a", header=False, index=False)
+                        df.to_csv(QUOTES_FILE, mode="a", header=False, index=False)
                     st.success(f"Quotation {quote_ref} generated for {c_company}.")
 
             if "active_quote_pdf" in st.session_state:
