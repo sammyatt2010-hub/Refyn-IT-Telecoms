@@ -58,20 +58,20 @@ ADVANCED_EXTRA_BAND_SIZE = 10           # ...of this many users (11-20 = £750, 
 # These override any other hardware price in the app. A product not
 # listed here keeps its existing price.
 HARDWARE_PRICES = {
-    "v67": 189.00,        # Fanvil Executive V67
-    "v66pro": 129.00,     # Fanvil Premium V66 Pro
-    "v62pro": 89.00,      # Fanvil Essential V62 Pro
+    "v67": 342.00,        # Fanvil Executive V67
+    "v66pro": 198.00,     # Fanvil Premium V66 Pro
+    "v62pro": 98.00,      # Fanvil Essential V62 Pro
     "w620w": 149.00,      # Linkvil Rugged W620W
     "t73w": 78.00,        # Yealink T73W
-    "t74w": 111.00,       # Yealink T74W
-    "t85w": 115.00,       # Yealink T85W
-    "t87w": 155.00,       # Yealink T87W
-    "t88w_pro": 225.00,   # Yealink T88W Pro
+    "t74w": 115.00,       # Yealink T74W
+    "t85w": 125.00,       # Yealink T85W
+    "t87w": 165.00,       # Yealink T87W
+    "t88w_pro": 235.00,   # Yealink T88W Pro
     "w74p": 87.00,        # Yealink W74P
-    "ax83h": 75.00,       # Yealink AX83H
-    "ax86r": 113.00,      # Yealink AX86R
+    "ax83h": 95.00,       # Yealink AX83H
+    "ax86r": 119.00,      # Yealink AX86R
     "uh36_mono": 42.00,   # Yealink UH36 Mono Headset UC
-    "psu_10w": 11.00,     # Yealink 10W PSU
+    "psu_10w": 14.00,     # Yealink 10W PSU
 }
 
 # ---- Terms ---------------------------------------------------------
